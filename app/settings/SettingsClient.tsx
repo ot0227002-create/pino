@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Save, Building2, Bell, Shield, Image as ImageIcon, Upload, Trash2,
+  ArrowLeft, Save, Building2, Bell, Shield, Image as ImageIcon, Upload, Trash2, Copy, Check,
 } from "lucide-react";
 import Cropper from "react-easy-crop";
 
@@ -43,6 +43,7 @@ export function SettingsClient() {
   // 絵文字ファビコン
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
   const [faviconDataUrl, setFaviconDataUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // 通知
   const [swStatus, setSwStatus] = useState<"checking"|"unsupported"|"registered"|"error">("checking");
@@ -59,6 +60,50 @@ export function SettingsClient() {
       .then(() => setSwStatus("registered"))
       .catch(() => setSwStatus("error"));
   }, []);
+
+  function generateCode(emoji: string): string {
+    return `// ① app/icon.tsx（ブラウザ用ファビコン 32×32）
+import { ImageResponse } from 'next/og';
+export const runtime = 'edge';
+export const size = { width: 32, height: 32 };
+export const contentType = 'image/png';
+export default function Icon() {
+  return new ImageResponse(
+    (
+      <div style={{ fontSize: 24, background: 'transparent', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        ${emoji}
+      </div>
+    ),
+    { ...size }
+  );
+}
+
+// ② app/apple-icon.tsx（iPhone ホーム画面用 180×180）
+import { ImageResponse } from 'next/og';
+export const runtime = 'edge';
+export const size = { width: 180, height: 180 };
+export const contentType = 'image/png';
+export default function AppleIcon() {
+  return new ImageResponse(
+    (
+      <div style={{ fontSize: 120, background: '#ffffff', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        ${emoji}
+      </div>
+    ),
+    { ...size }
+  );
+}`;
+  }
+
+  async function handleCopyCode(emoji: string) {
+    try {
+      await navigator.clipboard.writeText(generateCode(emoji));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback: select textarea
+    }
+  }
 
   function applyFavicon(url: string) {
     localStorage.setItem("appFavicon", url);
@@ -226,6 +271,47 @@ export function SettingsClient() {
                   </div>
                   <p className="text-xs text-gray-400 mt-2">選択するとCanvas描画でPNGに変換されます</p>
                 </div>
+
+                {/* コード生成エリア */}
+                {selectedEmoji && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-gray-700">
+                        ⚡ Next.js 実装用コード
+                        <span className="ml-2 text-xs font-normal text-gray-400">（貼り付けるだけで反映）</span>
+                      </p>
+                      <button
+                        onClick={() => handleCopyCode(selectedEmoji)}
+                        className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
+                          copied
+                            ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                            : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
+                        }`}
+                      >
+                        {copied
+                          ? <><Check className="w-3.5 h-3.5" />コピーしました！</>
+                          : <><Copy className="w-3.5 h-3.5" />コードをコピー</>}
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <textarea
+                        readOnly
+                        value={generateCode(selectedEmoji)}
+                        rows={28}
+                        className="w-full font-mono text-xs bg-gray-900 text-gray-100 border border-gray-700 rounded-xl px-4 py-3 resize-none focus:outline-none leading-relaxed"
+                        onClick={e => (e.target as HTMLTextAreaElement).select()}
+                      />
+                      <div className="absolute top-2 left-3 flex gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-green-400" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-gray-400 text-center">
+                      このコードを <code className="bg-gray-100 px-1 rounded">app/icon.tsx</code> と <code className="bg-gray-100 px-1 rounded">app/apple-icon.tsx</code> に貼り付けてください
+                    </p>
+                  </div>
+                )}
 
                 {/* 画像アップロード */}
                 <div>
