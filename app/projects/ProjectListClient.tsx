@@ -133,7 +133,7 @@ export function ProjectListClient() {
         </div>
       </header>
 
-      <main className="px-4 py-4 space-y-3 pb-24">
+      <main className="px-4 py-4 space-y-3 pb-36">
         {loading ? (
           <LoadingSpinner />
         ) : filtered.length === 0 ? (
@@ -147,7 +147,7 @@ export function ProjectListClient() {
 
       <Link
         href="/projects/new"
-        className="fixed bottom-6 right-6 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 shadow-lg"
+        className="fixed bottom-24 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 shadow-xl shadow-blue-200 active:scale-95 transition-transform"
         aria-label="新規案件"
       >
         <Plus className="h-6 w-6 text-white" />
