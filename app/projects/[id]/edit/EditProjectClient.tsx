@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, Save, TrendingUp } from "lucide-react";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { supabase, hasSupabase } from "@/lib/supabase-client";
-import { getProjectWithDetails } from "@/lib/mock-data";
+import { lsGetProject, lsUpdateProject, lsUpsertConstruction } from "@/lib/local-store";
 import { calcProfit, formatCurrency, formatRate } from "@/lib/profit";
 import {
   SALES_STATUS_LABEL,
@@ -77,7 +77,7 @@ export function EditProjectClient({ id }: { id: string }) {
       let data: ProjectWithDetails | null | undefined = null;
 
       if (!hasSupabase) {
-        data = getProjectWithDetails(id);
+        data = lsGetProject(id);
       } else {
         const { data: p } = await supabase.from("projects").select("*").eq("id", id).single();
         const { data: c } = await supabase
@@ -178,9 +178,38 @@ export function EditProjectClient({ id }: { id: string }) {
           await supabase.from("construction_details").insert(constructionPayload);
           setHasConstruction(true);
         }
+      } else {
+        // ── localStorage モード ──
+        lsUpdateProject(id, {
+          customer_name: customerName,
+          phone,
+          address,
+          work_type: workType,
+          status,
+          target_month: targetMonth,
+          last_contact_date: lastContactDate || null,
+          next_action_date: nextActionDate || null,
+          memo: memo || null,
+        });
+        lsUpsertConstruction({
+          project_id: id,
+          description: description || null,
+          construction_period: constructionPeriod || null,
+          start_date: startDate || null,
+          planned_end_date: plannedEndDate || null,
+          completion_date: completionDate || null,
+          site_memo: siteMemo || null,
+          is_contracted: isContracted,
+          contract_date: contractDate || null,
+          contract_amount: contractAmount ? parseFloat(contractAmount) : null,
+          subcontractor_cost: subcontractorCost ? parseFloat(subcontractorCost) : null,
+          material_cost: materialCost ? parseFloat(materialCost) : null,
+          other_cost: otherCost ? parseFloat(otherCost) : null,
+        });
       }
 
       router.push(`/projects/${id}`);
+      router.refresh();
     } catch (e) {
       console.error(e);
       alert("保存に失敗しました");

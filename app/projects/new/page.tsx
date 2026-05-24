@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Save } from "lucide-react";
 import Link from "next/link";
 import { supabase, hasSupabase } from "@/lib/supabase-client";
+import { lsCreateProject } from "@/lib/local-store";
 import {
   SALES_STATUS_LABEL,
   SALES_STATUS_ORDER,
@@ -71,8 +72,20 @@ export default function NewProjectPage() {
         if (error) throw error;
         router.push(`/projects/${data.id}`);
       } else {
-        // モック: 一覧に戻るだけ
-        router.push("/projects");
+        const created = lsCreateProject({
+          customer_name: customerName,
+          phone,
+          address,
+          work_type: workType,
+          status,
+          target_month: targetMonth,
+          next_action_date: nextActionDate || null,
+          memo: memo || null,
+          last_contact_date: null,
+          drawing_url: null,
+        });
+        router.push(`/projects/${created.id}`);
+        router.refresh();
       }
     } catch (e) {
       console.error(e);

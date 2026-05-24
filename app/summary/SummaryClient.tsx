@@ -7,7 +7,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell,
 } from "recharts";
 import { supabase, hasSupabase } from "@/lib/supabase-client";
-import { getProjectsWithDetails } from "@/lib/mock-data";
+import { lsGetProjects } from "@/lib/local-store";
 import { calcProfit } from "@/lib/profit";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import type { ProjectWithDetails } from "@/types";
@@ -73,7 +73,7 @@ export function SummaryClient() {
   async function loadData() {
     setLoading(true);
     try {
-      if (!hasSupabase) { setProjects(getProjectsWithDetails()); return; }
+      if (!hasSupabase) { setProjects(lsGetProjects()); return; }
       const { data: projectData } = await supabase.from("projects").select("*");
       const ids = (projectData ?? []).map((p: { id: string }) => p.id);
       const { data: constructions } = await supabase

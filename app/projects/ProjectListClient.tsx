@@ -14,7 +14,7 @@ import { StatusFilter } from "@/components/project/StatusFilter";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { WelcomeModal } from "@/components/ui/WelcomeModal";
 import { supabase, hasSupabase } from "@/lib/supabase-client";
-import { getProjectsWithDetails } from "@/lib/mock-data";
+import { lsGetProjects } from "@/lib/local-store";
 import { calcProfit } from "@/lib/profit";
 import type { ProjectWithDetails, SalesStatus, WorkType } from "@/types";
 
@@ -75,7 +75,7 @@ export function ProjectListClient() {
   async function loadProjects() {
     setLoading(true);
     try {
-      if (!hasSupabase) { setProjects(getProjectsWithDetails()); return; }
+      if (!hasSupabase) { setProjects(lsGetProjects()); return; }
       const { data: projectData, error } = await supabase
         .from("projects").select("*").order("updated_at", { ascending: false });
       if (error) throw error;

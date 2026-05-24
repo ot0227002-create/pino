@@ -27,7 +27,7 @@ import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { StatusChangeSheet } from "@/components/project/StatusChangeSheet";
 import { PhotoUpload } from "@/components/project/PhotoUpload";
 import { supabase, hasSupabase } from "@/lib/supabase-client";
-import { getProjectWithDetails } from "@/lib/mock-data";
+import { lsGetProject, lsUpdateProject, lsDeleteProject } from "@/lib/local-store";
 import { calcProfit } from "@/lib/profit";
 import { formatCurrency } from "@/lib/profit";
 import { cn } from "@/lib/utils";
@@ -58,8 +58,7 @@ export function ProjectDetailClient({ id }: { id: string }) {
     setLoading(true);
     try {
       if (!hasSupabase) {
-        const mock = getProjectWithDetails(id);
-        setProject(mock ?? null);
+        setProject(lsGetProject(id) ?? null);
         return;
       }
 
@@ -99,6 +98,8 @@ export function ProjectDetailClient({ id }: { id: string }) {
         .from("projects")
         .update({ status: newStatus, updated_at: new Date().toISOString() })
         .eq("id", id);
+    } else {
+      lsUpdateProject(id, { status: newStatus });
     }
     setProject((prev) => prev ? { ...prev, status: newStatus } : prev);
     setShowStatusSheet(false);
@@ -112,8 +113,11 @@ export function ProjectDetailClient({ id }: { id: string }) {
     try {
       if (hasSupabase) {
         await supabase.from("projects").delete().eq("id", id);
+      } else {
+        lsDeleteProject(id);
       }
       router.push("/projects");
+      router.refresh();
     } catch (e) {
       console.error(e);
       alert("削除に失敗しました");
