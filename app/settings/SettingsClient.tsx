@@ -60,14 +60,19 @@ export function SettingsClient() {
       .catch(() => setSwStatus("error"));
   }, []);
 
+  function applyFavicon(url: string) {
+    localStorage.setItem("appFavicon", url);
+    let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
+    if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }
+    link.href = url;
+  }
+
   function handleEmojiSelect(emoji: string) {
     setSelectedEmoji(emoji);
     const url = emojiToDataUrl(emoji);
     setFaviconDataUrl(url);
     setFaviconPreview(url);
-    let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
-    if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }
-    link.href = url;
+    applyFavicon(url);
   }
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -88,6 +93,7 @@ export function SettingsClient() {
       ctx.drawImage(img, croppedAreaPixels.x, croppedAreaPixels.y, croppedAreaPixels.width, croppedAreaPixels.height, 0, 0, 512, 512);
       const url = canvas.toDataURL("image/png");
       setFaviconPreview(url); setFaviconDataUrl(url); setShowCropper(false); setImage(null);
+      applyFavicon(url);
     };
     img.src = image;
   };
@@ -194,7 +200,7 @@ export function SettingsClient() {
                         : <span className="text-gray-300 text-3xl">?</span>}
                     </div>
                     {faviconPreview && (
-                      <button onClick={() => { setFaviconPreview(null); setFaviconDataUrl(null); setSelectedEmoji(null); }}
+                      <button onClick={() => { setFaviconPreview(null); setFaviconDataUrl(null); setSelectedEmoji(null); localStorage.removeItem("appFavicon"); }}
                         className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full shadow hover:bg-red-600">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

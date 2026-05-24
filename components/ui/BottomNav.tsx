@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FolderOpen, LayoutDashboard, PlusCircle, Settings } from "lucide-react";
+import { FolderOpen, BarChart2, PlusCircle, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/projects", icon: FolderOpen, label: "案件" },
+  { href: "/summary",      icon: BarChart2,  label: "サマリー" },
+  { href: "/projects",     icon: FolderOpen, label: "案件" },
   { href: "/projects/new", icon: PlusCircle, label: "新規" },
-  { href: "/dashboard", icon: LayoutDashboard, label: "集計" },
-  { href: "/settings", icon: Settings, label: "設定" },
+  { href: "/settings",     icon: Settings,   label: "設定" },
 ];
 
 export function BottomNav() {
@@ -21,7 +21,7 @@ export function BottomNav() {
         {NAV.map(({ href, icon: Icon, label }) => {
           const active =
             href === "/projects"
-              ? pathname === "/projects" || pathname.startsWith("/projects/") && pathname !== "/projects/new"
+              ? (pathname === "/projects" || (pathname.startsWith("/projects/") && pathname !== "/projects/new"))
               : pathname.startsWith(href);
           return (
             <Link

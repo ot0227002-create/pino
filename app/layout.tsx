@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { BottomNav } from "@/components/ui/BottomNav";
+import FaviconPersistence from "@/components/ui/FaviconPersistence";
 
 export const metadata: Metadata = {
   title: {
@@ -27,6 +28,7 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body>
+        <FaviconPersistence />
         {children}
         <BottomNav />
       </body>
