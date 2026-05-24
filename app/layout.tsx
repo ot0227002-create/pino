@@ -11,6 +11,11 @@ export const metadata: Metadata = {
   description: "リフォーム・工事会社向け案件・利益管理アプリ",
   applicationName: "PRO-MANAGEMENT",
   manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "PRO-MGMT",
+  },
 };
 
 export const viewport: Viewport = {
