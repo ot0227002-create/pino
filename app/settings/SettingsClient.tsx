@@ -4,8 +4,17 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Save, Building2, Bell, Shield, Image as ImageIcon, Copy, Check,
-  Eye, EyeOff, LogOut, Clock, BookOpen,
+  Eye, EyeOff, LogOut, Clock, BookOpen, Mail,
 } from "lucide-react";
+
+const DEFAULT_EMAIL_TEMPLATES = {
+  inquiry:
+    "この度はお問い合わせいただき、誠にありがとうございます。\n\nご希望の内容を確認させていただき、改めてご提案申し上げます。\n\nよろしくお願いいたします。",
+  estimate:
+    "先日は現地調査にご協力いただき、ありがとうございました。\n\nお見積もりをご用意いたしましたのでご確認ください。\n\nご不明な点はお気軽にご連絡ください。",
+  construction:
+    "この度はご契約いただき、誠にありがとうございます。\n\n工事が完了いたしました。\n\n何かお気づきの点がございましたら、いつでもご連絡ください。",
+};
 
 const EMOJI_LIST = ["🏗️", "🛠️", "🏡", "📊", "📈", "🎨", "🚧"];
 
@@ -48,6 +57,15 @@ export function SettingsClient() {
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
 
+  // メール設定
+  const [emailCompanyName, setEmailCompanyName] = useState("");
+  const [emailPersonName, setEmailPersonName] = useState("");
+  const [emailDepartment, setEmailDepartment] = useState("");
+  const [emailTemplateInquiry, setEmailTemplateInquiry] = useState(DEFAULT_EMAIL_TEMPLATES.inquiry);
+  const [emailTemplateEstimate, setEmailTemplateEstimate] = useState(DEFAULT_EMAIL_TEMPLATES.estimate);
+  const [emailTemplateConstruction, setEmailTemplateConstruction] = useState(DEFAULT_EMAIL_TEMPLATES.construction);
+  const [emailSaved, setEmailSaved] = useState(false);
+
   // 通知
   const [swStatus, setSwStatus] = useState<"checking"|"unsupported"|"registered"|"error">("checking");
   const [notifPermission, setNotifPermission] = useState<string>("default");
@@ -62,6 +80,13 @@ export function SettingsClient() {
     // ログイン時刻
     const raw = localStorage.getItem("loginTime");
     if (raw) setLoginTime(Number(raw));
+    // メール設定
+    setEmailCompanyName(localStorage.getItem("emailCompanyName") ?? "");
+    setEmailPersonName(localStorage.getItem("emailPersonName") ?? "");
+    setEmailDepartment(localStorage.getItem("emailDepartment") ?? "");
+    setEmailTemplateInquiry(localStorage.getItem("emailTemplate_inquiry") ?? DEFAULT_EMAIL_TEMPLATES.inquiry);
+    setEmailTemplateEstimate(localStorage.getItem("emailTemplate_estimate") ?? DEFAULT_EMAIL_TEMPLATES.estimate);
+    setEmailTemplateConstruction(localStorage.getItem("emailTemplate_construction") ?? DEFAULT_EMAIL_TEMPLATES.construction);
     const np  = localStorage.getItem("notifProgress");
     const nt  = localStorage.getItem("notifTask");
     const npr = localStorage.getItem("notifProfit");
@@ -162,6 +187,17 @@ export default function AppleIcon() {
     setNotifPermission(perm);
   }
 
+  function handleEmailSave() {
+    localStorage.setItem("emailCompanyName", emailCompanyName);
+    localStorage.setItem("emailPersonName", emailPersonName);
+    localStorage.setItem("emailDepartment", emailDepartment);
+    localStorage.setItem("emailTemplate_inquiry", emailTemplateInquiry);
+    localStorage.setItem("emailTemplate_estimate", emailTemplateEstimate);
+    localStorage.setItem("emailTemplate_construction", emailTemplateConstruction);
+    setEmailSaved(true);
+    setTimeout(() => setEmailSaved(false), 2000);
+  }
+
   function toggleNotif(key: "notifProgress"|"notifTask"|"notifProfit", setter: (v: boolean) => void, current: boolean) {
     const v = !current;
     setter(v);
@@ -217,7 +253,7 @@ export default function AppleIcon() {
             </button>
             <h1 className="text-lg font-bold text-gray-900">システム設定</h1>
           </div>
-          {activeTab !== "favicon" && activeTab !== "guide" && (
+          {activeTab !== "favicon" && activeTab !== "guide" && activeTab !== "email" && (
             <button onClick={() => setIsSaving(true)} disabled={isSaving}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-50">
               {isSaving ? "保存中..." : <><Save className="w-4 h-4" />保存</>}
@@ -231,6 +267,7 @@ export default function AppleIcon() {
         <aside className="md:col-span-1 space-y-1">
           {[
             { id: "company",      label: "会社情報",    icon: Building2 },
+            { id: "email",        label: "メール設定",  icon: Mail },
             { id: "favicon",      label: "ファビコン",   icon: ImageIcon },
             { id: "notification", label: "通知",        icon: Bell },
             { id: "security",     label: "セキュリティ", icon: Shield },
@@ -268,6 +305,81 @@ export default function AppleIcon() {
                       className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
                   </div>
                 </div>
+              </>
+            )}
+
+            {/* ── メール設定 ── */}
+            {activeTab === "email" && (
+              <>
+                <h2 className="text-base font-bold text-gray-900 border-l-4 border-blue-500 pl-3">メール・署名設定</h2>
+
+                {/* 署名（基本情報）*/}
+                <div className="space-y-3">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">署名（基本情報）</p>
+                  <div className="space-y-3">
+                    {[
+                      { label: "会社名", placeholder: "こばかい工務店", value: emailCompanyName, setter: setEmailCompanyName },
+                      { label: "名前",   placeholder: "小林 太郎",   value: emailPersonName,   setter: setEmailPersonName },
+                      { label: "部署・役職", placeholder: "営業部 / 代表", value: emailDepartment, setter: setEmailDepartment },
+                    ].map(({ label, placeholder, value, setter }) => (
+                      <div key={label}>
+                        <label className="text-xs text-gray-500 font-semibold block mb-1">{label}</label>
+                        <input
+                          type="text"
+                          value={value}
+                          onChange={e => setter(e.target.value)}
+                          placeholder={placeholder}
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {(emailPersonName || emailCompanyName) && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-500 font-mono leading-relaxed">
+                      <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-1">署名プレビュー</p>
+                      ---<br />
+                      {emailPersonName}{emailDepartment ? `（${emailDepartment}）` : ""}<br />
+                      {emailCompanyName}
+                    </div>
+                  )}
+                </div>
+
+                {/* メールテンプレート */}
+                <div className="space-y-4">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">メールテンプレート</p>
+                  {([
+                    { label: "お問い合わせ後のメール", value: emailTemplateInquiry, setter: setEmailTemplateInquiry },
+                    { label: "現地調査・見積提出時のメール", value: emailTemplateEstimate, setter: setEmailTemplateEstimate },
+                    { label: "着工・完工のご挨拶メール", value: emailTemplateConstruction, setter: setEmailTemplateConstruction },
+                  ] as const).map(({ label, value, setter }) => (
+                    <div key={label}>
+                      <label className="text-xs text-gray-500 font-semibold block mb-1.5">{label}</label>
+                      <textarea
+                        value={value}
+                        onChange={e => setter(e.target.value)}
+                        rows={4}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
+                  💡 登録したテンプレートは案件詳細の「AI連絡文作成」からワンタップで呼び出せます
+                </div>
+
+                <button
+                  onClick={handleEmailSave}
+                  className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                    emailSaved
+                      ? "bg-emerald-500 text-white"
+                      : "bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
+                >
+                  {emailSaved
+                    ? <><Check className="w-4 h-4" />保存しました！</>
+                    : <><Save className="w-4 h-4" />保存する</>}
+                </button>
               </>
             )}
 

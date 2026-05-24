@@ -15,6 +15,11 @@ import {
   CheckSquare,
   Square,
   Trash2,
+  Wand2,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ProfitCard } from "@/components/ui/ProfitCard";
@@ -268,6 +273,7 @@ export function ProjectDetailClient({ id }: { id: string }) {
                   </p>
                 </Section>
               )}
+              <AiEmailComposer project={project} />
             </div>
           )}
 
@@ -426,6 +432,242 @@ export function ProjectDetailClient({ id }: { id: string }) {
         </div>
       )}
     </>
+  );
+}
+
+// ────────────────────────────────────────────────────
+// AI メール生成ロジック
+// ────────────────────────────────────────────────────
+function generateEmailText(params: {
+  customerName: string;
+  status: SalesStatus;
+  workType: string;
+  description: string | null;
+  startDate: string | null;
+  plannedEndDate: string | null;
+  pastEmail: string;
+  instruction: string;
+  signature: string;
+}): string {
+  const { customerName, status, workType, description, startDate, pastEmail, instruction, signature } = params;
+  const workLabel = WORK_TYPE_LABEL[params.workType as keyof typeof WORK_TYPE_LABEL] ?? workType;
+
+  // 口調検出（敬語 vs カジュアル）
+  const formalHits = (pastEmail.match(/ございます|いたします|誠に|拝察|御社|いただき/g) ?? []).length;
+  const casualHits = (pastEmail.match(/よろしく！|ですね！|ー！|だよ|じゃん/g) ?? []).length;
+  const greeting = formalHits >= casualHits
+    ? "平素より大変お世話になっております。"
+    : "いつもお世話になっております。";
+
+  const statusCtx: Partial<Record<SalesStatus, string>> = {
+    new_inquiry: `この度は${workLabel}工事についてお問い合わせいただき、誠にありがとうございます。`,
+    survey_scheduled: "現地調査のご予約をいただき、ありがとうございます。",
+    survey_done: "先日は現地調査にご協力いただき、誠にありがとうございました。",
+    estimating: description ? `${description}のお見積もりを現在作成中でございます。` : `${workLabel}工事のお見積もりを作成しております。`,
+    estimate_sent: "先日お送りしましたお見積もりにつきまして、ご確認いただけましたでしょうか。",
+    considering: "ご検討中のところ恐れ入りますが、ご連絡申し上げます。",
+    contracted: "この度はご契約いただき、誠にありがとうございます。",
+    in_progress: description ? `現在、${description}の工事を鋭意進めております。` : "現在、工事を進めさせていただいております。",
+    completed: `この度は${workLabel}工事が無事に完了いたしました。`,
+  };
+
+  let body: string;
+  if (!instruction.trim()) {
+    body = "ご不明な点やご要望がございましたら、いつでもお気軽にご連絡ください。\n\n今後ともどうぞよろしくお願いいたします。";
+  } else {
+    const kw = instruction;
+    if (/時間.*変更|変更.*時間|日程.*変更|変更.*日程|リスケ|スケジュール変更/.test(kw)) {
+      const what = /現調|現地調査/.test(kw) ? "現地調査" : /見積/.test(kw) ? "お見積もりのご説明" : "打ち合わせ";
+      body = `${what}の日程変更についてご相談したくご連絡いたしました。\n\n${kw}をお願いできますでしょうか。\n\nお忙しい中恐れ入りますが、ご都合のほどをお知らせいただけますと幸いです。`;
+    } else if (/追加.*見積|見積.*追加|追加工事/.test(kw)) {
+      body = `${description ? `${description}の工事に関しまして` : "工事に関しまして"}、追加工事のお見積もりをご用意いたしましたのでご確認ください。\n\n${kw}\n\nご不明な点がございましたら、お気軽にお申し付けください。`;
+    } else if (/見積|お見積/.test(kw)) {
+      body = `${description ? `${description}の` : ""}お見積もりについてご連絡いたします。\n\n${kw}\n\nご確認のほど、よろしくお願いいたします。`;
+    } else if (/着工|工事開始|スタート/.test(kw)) {
+      const dateInfo = startDate ? `着工予定日は ${startDate} を予定しております。` : "着工日程は改めてご連絡いたします。";
+      body = `工事着工についてご連絡申し上げます。\n\n${kw}\n\n${dateInfo}\n\n工事期間中はご不便をおかけすることがございますが、何卒よろしくお願いいたします。`;
+    } else if (/完工|完成|竣工|引き渡し/.test(kw)) {
+      body = `${description ? `${description}の` : ""}工事についてご連絡申し上げます。\n\n${kw}\n\n改めてご依頼いただき、誠にありがとうございました。何かお気づきの点がございましたら、いつでもご連絡ください。`;
+    } else if (/確認|チェック/.test(kw)) {
+      body = `${kw}について、ご確認をお願いしたくご連絡いたしました。\n\nご確認のほど、よろしくお願いいたします。`;
+    } else {
+      body = `${kw}について、ご連絡申し上げます。\n\nご不明な点がございましたら、お気軽にお申し付けください。`;
+    }
+  }
+
+  const parts: string[] = [`${customerName}様`, "", greeting];
+  const ctx = statusCtx[status];
+  if (ctx) parts.push(ctx);
+  parts.push("", body, "", "何卒よろしくお願いいたします。");
+  if (signature) parts.push("", signature);
+  return parts.join("\n");
+}
+
+// ────────────────────────────────────────────────────
+// AI連絡文作成コンポーネント
+// ────────────────────────────────────────────────────
+function AiEmailComposer({ project }: { project: ProjectWithDetails }) {
+  const [open, setOpen] = useState(false);
+  const [pastEmail, setPastEmail] = useState("");
+  const [instruction, setInstruction] = useState("");
+  const [generated, setGenerated] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [signature, setSignature] = useState("");
+  const [templates, setTemplates] = useState<{ key: string; name: string; body: string }[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    const company  = localStorage.getItem("emailCompanyName") ?? "";
+    const person   = localStorage.getItem("emailPersonName") ?? "";
+    const dept     = localStorage.getItem("emailDepartment") ?? "";
+    const sigParts = [person + (dept ? `（${dept}）` : ""), company].filter(Boolean);
+    setSignature(sigParts.length ? ["---", ...sigParts].join("\n") : "");
+    const keys  = ["inquiry", "estimate", "construction"] as const;
+    const names = ["お問い合わせ後", "現調・見積提出時", "着工・完工時"];
+    setTemplates(
+      keys.map((k, i) => ({ key: k, name: names[i], body: localStorage.getItem(`emailTemplate_${k}`) ?? "" }))
+          .filter(t => t.body)
+    );
+  }, [open]);
+
+  function handleGenerate() {
+    setGenerating(true);
+    setTimeout(() => {
+      setGenerated(generateEmailText({
+        customerName: project.customer_name,
+        status: project.status,
+        workType: project.work_type,
+        description: project.construction?.description ?? null,
+        startDate: project.construction?.start_date ?? null,
+        plannedEndDate: project.construction?.planned_end_date ?? null,
+        pastEmail,
+        instruction,
+        signature,
+      }));
+      setGenerating(false);
+    }, 700);
+  }
+
+  async function handleCopy() {
+    try { await navigator.clipboard.writeText(generated); } catch { /* noop */ }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="rounded-xl border border-indigo-200 bg-white overflow-hidden shadow-sm">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3.5 bg-gradient-to-r from-indigo-50 to-blue-50 active:opacity-90 transition-opacity"
+      >
+        <div className="flex items-center gap-2">
+          <Wand2 className="h-4 w-4 text-indigo-500" />
+          <p className="text-sm font-bold text-indigo-900">AI連絡文作成</p>
+          <span className="text-[9px] bg-indigo-100 text-indigo-600 rounded-full px-2 py-0.5 font-bold tracking-wide">AI</span>
+        </div>
+        {open
+          ? <ChevronUp className="h-4 w-4 text-indigo-400" />
+          : <ChevronDown className="h-4 w-4 text-indigo-400" />}
+      </button>
+
+      {open && (
+        <div className="p-4 space-y-4 border-t border-indigo-100">
+          {/* 宛先プレビュー */}
+          <div className="flex items-center gap-2 text-sm bg-indigo-50 rounded-xl px-3 py-2">
+            <span className="text-xs text-indigo-400 font-semibold shrink-0">宛先</span>
+            <span className="font-bold text-indigo-900">{project.customer_name}様</span>
+            <span className="text-[10px] text-indigo-400 ml-auto">{WORK_TYPE_LABEL[project.work_type]} / {SALES_STATUS_LABEL[project.status]}</span>
+          </div>
+
+          {/* テンプレート一覧 */}
+          {templates.length > 0 && (
+            <div>
+              <p className="text-[11px] text-gray-400 font-semibold mb-2 uppercase tracking-wide">テンプレートを過去文欄に転写</p>
+              <div className="flex flex-wrap gap-2">
+                {templates.map(t => (
+                  <button key={t.key} onClick={() => setPastEmail(t.body)}
+                    className="text-xs bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-full px-3 py-1.5 active:bg-indigo-100 font-medium">
+                    📄 {t.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 過去のやり取り欄 */}
+          <div>
+            <label className="text-[11px] text-gray-400 font-semibold block mb-1.5 uppercase tracking-wide">
+              過去のメール・LINEのやり取り（口調の参考用）
+            </label>
+            <textarea
+              value={pastEmail}
+              onChange={e => setPastEmail(e.target.value)}
+              placeholder="過去にお客様とやり取りしたメールやLINEをここに貼り付けてください（口調を参考にします）"
+              rows={3}
+              className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50 placeholder:text-gray-300"
+            />
+          </div>
+
+          {/* 指示欄 */}
+          <div>
+            <label className="text-[11px] text-gray-400 font-semibold block mb-1.5 uppercase tracking-wide">
+              今回の要件・指示
+            </label>
+            <textarea
+              value={instruction}
+              onChange={e => setInstruction(e.target.value)}
+              placeholder="例: 明日の現調を14時から16時に変更してほしい"
+              rows={2}
+              className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50 placeholder:text-gray-300"
+            />
+          </div>
+
+          {/* 生成ボタン */}
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-bold text-sm shadow-md shadow-indigo-200 active:opacity-90 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            {generating ? (
+              <><span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />生成中...</>
+            ) : (
+              <><Wand2 className="h-4 w-4" />AI文章を生成する</>
+            )}
+          </button>
+
+          {/* 生成結果 */}
+          {generated && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">生成された文章</p>
+                <button
+                  onClick={handleCopy}
+                  className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-all active:scale-95 ${
+                    copied ? "bg-emerald-500 text-white" : "bg-blue-600 text-white"
+                  }`}
+                >
+                  {copied
+                    ? <><Check className="h-3.5 w-3.5" />コピー済！</>
+                    : <><Copy className="h-3.5 w-3.5" />コピー</>}
+                </button>
+              </div>
+              <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+                <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{generated}</p>
+              </div>
+              <p className="text-[10px] text-gray-400 text-center">LINEやメールアプリに貼り付けて使えます</p>
+            </div>
+          )}
+
+          {/* 署名プレビュー */}
+          {!generated && signature && (
+            <div className="text-[10px] text-gray-400 border-t border-indigo-100 pt-2">
+              署名: {signature.replace(/^---\n/, "").split("\n").join(" / ")}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
