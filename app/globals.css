@@ -44,6 +44,14 @@
   animation: shimmer 2.4s ease-in-out infinite;
 }
 
+@keyframes welcomeSheet {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.animate-welcome-sheet {
+  animation: welcomeSheet 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @layer utilities {
   .pt-safe-top {
     padding-top: env(safe-area-inset-top, 0px);

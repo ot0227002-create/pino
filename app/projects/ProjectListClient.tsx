@@ -12,6 +12,7 @@ import {
 import { ProjectCard } from "@/components/project/ProjectCard";
 import { StatusFilter } from "@/components/project/StatusFilter";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { WelcomeModal } from "@/components/ui/WelcomeModal";
 import { supabase, hasSupabase } from "@/lib/supabase-client";
 import { getProjectsWithDetails } from "@/lib/mock-data";
 import { calcProfit } from "@/lib/profit";
@@ -255,6 +256,7 @@ export function ProjectListClient() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <WelcomeModal />
       {/* ── ヘッダー ── */}
       <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 pt-safe-top">
         <div className="flex items-center justify-between h-14">
