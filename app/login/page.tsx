@@ -4,7 +4,7 @@ export const runtime = "edge";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, HardHat } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -53,7 +53,7 @@ export default function LoginPage() {
           {/* ロゴ */}
           <div className="flex flex-col items-center gap-3">
             <div className="h-20 w-20 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg">
-              <HardHat className="h-10 w-10 text-white" />
+              <span className="text-4xl">🏗️</span>
             </div>
             <div className="text-center">
               <h1 className="text-2xl font-bold text-gray-900 tracking-tight">

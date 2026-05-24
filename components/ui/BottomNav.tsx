@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { FolderOpen, BarChart2, PlusCircle, Settings, ArrowLeft, ArrowRight, RotateCw } from "lucide-react";
+import { FolderOpen, BarChart2, PlusCircle, Settings, ArrowLeft, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -31,12 +31,6 @@ export function BottomNav() {
           aria-label="進む"
           className="flex items-center justify-center w-11 h-11 rounded-xl text-gray-500 active:bg-gray-100 active:text-gray-800 transition-colors">
           <ArrowRight className="h-5 w-5" />
-        </button>
-        <button
-          onClick={() => window.location.reload()}
-          aria-label="更新"
-          className="flex items-center justify-center w-11 h-11 rounded-xl text-gray-500 active:bg-gray-100 active:text-gray-800 transition-colors">
-          <RotateCw className="h-4.5 w-4.5" />
         </button>
         <div className="flex-1" />
         <span className="text-[10px] text-gray-300 pr-2">こばかいアプリ</span>

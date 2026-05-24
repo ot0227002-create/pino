@@ -43,7 +43,7 @@ export function ProjectListClient() {
     router.push("/login");
   }
 
-  useEffect(() => { loadProjects(); }, []);
+  useEffect(() => { router.refresh(); loadProjects(); }, []);
 
   async function loadProjects() {
     setLoading(true);

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Save, Building2, Bell, Shield, Image as ImageIcon, Copy, Check,
-  Eye, EyeOff, LogOut, Clock,
+  Eye, EyeOff, LogOut, Clock, BookOpen,
 } from "lucide-react";
 
 const EMOJI_LIST = ["🏗️", "🛠️", "🏡", "📊", "📈", "🎨", "🚧"];
@@ -183,7 +183,7 @@ export default function AppleIcon() {
             </button>
             <h1 className="text-lg font-bold text-gray-900">システム設定</h1>
           </div>
-          {activeTab !== "favicon" && (
+          {activeTab !== "favicon" && activeTab !== "guide" && (
             <button onClick={() => setIsSaving(true)} disabled={isSaving}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-50">
               {isSaving ? "保存中..." : <><Save className="w-4 h-4" />保存</>}
@@ -200,6 +200,7 @@ export default function AppleIcon() {
             { id: "favicon",      label: "ファビコン",   icon: ImageIcon },
             { id: "notification", label: "通知",        icon: Bell },
             { id: "security",     label: "セキュリティ", icon: Shield },
+            { id: "guide",        label: "操作説明",     icon: BookOpen },
           ].map((tab) => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
@@ -523,6 +524,86 @@ export default function AppleIcon() {
                     <LogOut className="w-4 h-4" />
                     ログアウト
                   </button>
+                </div>
+              </>
+            )}
+
+            {/* ── 操作説明 ── */}
+            {activeTab === "guide" && (
+              <>
+                <h2 className="text-base font-bold text-gray-900 border-l-4 border-blue-500 pl-3">操作説明</h2>
+
+                {/* 電話・マップ連携 */}
+                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">📞</span>
+                    <p className="text-sm font-bold text-blue-800">電話・Googleマップ連携</p>
+                  </div>
+                  <p className="text-sm text-blue-700 leading-relaxed">
+                    案件一覧や詳細画面の<span className="font-semibold">「電話番号」をタップ</span>すると、iPhoneの電話アプリが即座に起動して発信できます。<br />
+                    <span className="font-semibold">「施工場所（住所）」をタップ</span>すると、GoogleマップアプリでピンポイントのナビをすぐFに起動できます。
+                  </p>
+                  <div className="bg-white rounded-xl px-3 py-2 text-xs text-blue-600 border border-blue-100">
+                    💡 案件カード下部の青ボタン（電話）と緑ボタン（マップ）からもワンタップでアクセスできます
+                  </div>
+                </div>
+
+                {/* 定型文 */}
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">📝</span>
+                    <p className="text-sm font-bold text-emerald-800">フリック入力削減（定型文）</p>
+                  </div>
+                  <p className="text-sm text-emerald-700 leading-relaxed">
+                    案件の編集画面（メモ・現場状況メモ欄）に、よく使うフレーズの<span className="font-semibold">定型文ボタン</span>が並んでいます。タップするだけで自動的に入力されるので、現場でのフリック入力を大幅に削減できます。
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {["不在・留守電", "現調完了・見積へ", "追加工事発生", "完工・引き渡し"].map(t => (
+                      <span key={t} className="text-xs bg-white text-emerald-700 border border-emerald-200 rounded-full px-3 py-1">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* iPhone アプリ化 */}
+                <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">📱</span>
+                    <p className="text-sm font-bold text-violet-800">iPhoneアプリとして使う手順</p>
+                  </div>
+                  <p className="text-sm text-violet-700">
+                    ホーム画面に追加すると、Safariのアドレスバーが消えた<span className="font-semibold">専用アプリ</span>として快適に操作できます。
+                  </p>
+                  <ol className="space-y-2">
+                    {[
+                      "iPhone の Safari でこのアプリを開く",
+                      "画面下部の「共有ボタン（□↑）」をタップ",
+                      "メニューをスクロールして「ホーム画面に追加」をタップ",
+                      "右上の「追加」をタップして完了",
+                    ].map((step, i) => (
+                      <li key={i} className="flex items-start gap-2.5 text-sm text-violet-700">
+                        <span className="shrink-0 w-5 h-5 rounded-full bg-violet-200 text-violet-800 text-[10px] font-bold flex items-center justify-center mt-0.5">
+                          {i + 1}
+                        </span>
+                        {step}
+                      </li>
+                    ))}
+                  </ol>
+                  <div className="bg-white rounded-xl px-3 py-2 text-xs text-violet-600 border border-violet-100">
+                    ⚠️ プッシュ通知を受け取るには iOS 16.4 以上が必要です
+                  </div>
+                </div>
+
+                {/* ナビゲーション */}
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🔀</span>
+                    <p className="text-sm font-bold text-gray-800">ナビゲーション操作</p>
+                  </div>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    画面下部のナビバーにある「<span className="font-semibold">← 戻る</span>」「<span className="font-semibold">→ 進む</span>」ボタンで、iPhoneのPWAモードでもブラウザの履歴をスムーズに操作できます。ページを切り替えるたびに最新データが自動読み込みされます。
+                  </p>
                 </div>
               </>
             )}
