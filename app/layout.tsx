@@ -4,11 +4,12 @@ import { BottomNav } from "@/components/ui/BottomNav";
 
 export const metadata: Metadata = {
   title: {
-    default: "案件管理",
-    template: "%s | 案件管理",
+    default: "PRO-MANAGEMENT",
+    template: "%s | PRO-MANAGEMENT",
   },
   description: "リフォーム・工事会社向け案件・利益管理アプリ",
-  applicationName: "案件管理",
+  applicationName: "PRO-MANAGEMENT",
+  manifest: "/manifest.json",
 };
 
 export const viewport: Viewport = {
