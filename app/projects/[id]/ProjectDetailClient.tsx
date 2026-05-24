@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Phone,
@@ -13,6 +14,7 @@ import {
   Edit3,
   CheckSquare,
   Square,
+  Trash2,
 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ProfitCard } from "@/components/ui/ProfitCard";
@@ -36,10 +38,12 @@ import {
 type Tab = "sales" | "construction" | "profit" | "photos";
 
 export function ProjectDetailClient({ id }: { id: string }) {
+  const router = useRouter();
   const [project, setProject] = useState<ProjectWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("sales");
   const [showStatusSheet, setShowStatusSheet] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     loadProject();
@@ -97,6 +101,18 @@ export function ProjectDetailClient({ id }: { id: string }) {
 
   function handleImagesChange(images: ProjectImage[]) {
     setProject((prev) => prev ? { ...prev, images } : prev);
+  }
+
+  async function handleDelete() {
+    try {
+      if (hasSupabase) {
+        await supabase.from("projects").delete().eq("id", id);
+      }
+      router.push("/projects");
+    } catch (e) {
+      console.error(e);
+      alert("削除に失敗しました");
+    }
   }
 
   if (loading) {
@@ -170,8 +186,15 @@ export function ProjectDetailClient({ id }: { id: string }) {
                   </a>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                  <MapPin className="h-3.5 w-3.5 text-gray-400" />
-                  <span className="truncate">{project.address}</span>
+                  <MapPin className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(project.address)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 underline truncate"
+                  >
+                    {project.address}
+                  </a>
                 </div>
               </div>
             </div>
@@ -348,6 +371,17 @@ export function ProjectDetailClient({ id }: { id: string }) {
               onChange={handleImagesChange}
             />
           )}
+
+          {/* 削除ボタン */}
+          <div className="pt-6 pb-2">
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border-2 border-red-200 text-red-500 text-sm font-bold active:bg-red-50 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+              この案件を削除する
+            </button>
+          </div>
         </main>
       </div>
 
@@ -357,6 +391,39 @@ export function ProjectDetailClient({ id }: { id: string }) {
           onSelect={handleStatusChange}
           onClose={() => setShowStatusSheet(false)}
         />
+      )}
+
+      {/* 削除確認モーダル */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-end justify-center p-4 pb-8">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-5 shadow-xl">
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="w-7 h-7 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">案件を削除しますか？</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  <span className="font-semibold text-gray-700">{project.customer_name}</span>様の案件データがすべて削除されます。この操作は取り消せません。
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 py-3.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 active:bg-gray-50"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-3.5 rounded-xl bg-red-500 text-sm font-bold text-white active:bg-red-600"
+              >
+                削除する
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

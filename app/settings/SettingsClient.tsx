@@ -321,52 +321,71 @@ export default function AppleIcon() {
               <>
                 <h2 className="text-base font-bold text-gray-900 border-l-4 border-blue-500 pl-3">プッシュ通知設定</h2>
 
-                {/* SW ステータス */}
-                <div className="bg-gray-50 border border-gray-200 rounded-xl px-5 py-4">
-                  <p className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">Service Worker</p>
-                  <p className={`text-sm font-semibold ${
-                    swStatus === "registered"  ? "text-emerald-600"
-                    : swStatus === "unsupported" ? "text-red-500"
-                    : swStatus === "error"       ? "text-amber-500"
-                    : "text-gray-400"
-                  }`}>
-                    {swStatus === "registered"  && "✅ 登録済み — バックグラウンド通知が有効"}
-                    {swStatus === "unsupported" && "❌ このブラウザは非対応"}
-                    {swStatus === "error"       && "⚠️ 登録エラー（開発環境では正常）"}
-                    {swStatus === "checking"    && "確認中..."}
-                  </p>
-                </div>
-
-                {/* 通知権限 */}
-                <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-5 py-4">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">通知の許可状態</p>
-                    <p className={`text-xs mt-0.5 ${perm.cls}`}>{perm.text}</p>
+                {/* ─ メイントグル ─ */}
+                <div className={`rounded-2xl border-2 px-5 py-5 flex items-center justify-between transition-colors ${
+                  notifPermission === "granted"
+                    ? "border-emerald-200 bg-emerald-50"
+                    : "border-gray-200 bg-gray-50"
+                }`}>
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-bold text-gray-900">プッシュ通知</p>
+                    <p className={`text-xs font-semibold ${
+                      notifPermission === "granted" ? "text-emerald-600"
+                      : notifPermission === "denied" ? "text-red-500"
+                      : "text-gray-400"
+                    }`}>
+                      {notifPermission === "granted" && "🔔 ON — 通知が有効です"}
+                      {notifPermission === "denied"  && "🔕 拒否済み — ブラウザ設定から変更してください"}
+                      {notifPermission === "default" && "OFF — タップして有効にする"}
+                    </p>
                   </div>
-                  {notifPermission !== "granted" && (
-                    <button onClick={requestPermission}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all active:scale-95">
-                      許可する
-                    </button>
-                  )}
+                  {/* トグルスイッチ */}
+                  <button
+                    onClick={notifPermission === "default" ? requestPermission : undefined}
+                    disabled={notifPermission === "denied"}
+                    aria-label="通知のON/OFF"
+                    className={`relative h-8 w-14 rounded-full transition-colors duration-200 shrink-0 disabled:opacity-50 ${
+                      notifPermission === "granted" ? "bg-emerald-500" : "bg-gray-300"
+                    }`}
+                  >
+                    <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                      notifPermission === "granted" ? "translate-x-7" : "translate-x-1"
+                    }`} />
+                  </button>
                 </div>
 
                 {notifPermission === "denied" && (
                   <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                    ⚠️ ブラウザの設定から手動で許可してください（アドレスバーの🔒マーク）
+                    ⚠️ ブラウザの設定から手動で許可してください（アドレスバーの🔒マーク → 通知 → 許可）
                   </div>
                 )}
 
+                {/* SW ステータス */}
+                <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+                  <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Service Worker</p>
+                  <p className={`text-xs font-semibold ${
+                    swStatus === "registered"   ? "text-emerald-600"
+                    : swStatus === "unsupported" ? "text-red-500"
+                    : swStatus === "error"        ? "text-amber-500"
+                    : "text-gray-400"
+                  }`}>
+                    {swStatus === "registered"   && "✅ 登録済み — バックグラウンド通知が有効"}
+                    {swStatus === "unsupported"  && "❌ このブラウザは非対応"}
+                    {swStatus === "error"        && "⚠️ 登録エラー（開発環境では正常）"}
+                    {swStatus === "checking"     && "確認中..."}
+                  </p>
+                </div>
+
                 {/* テスト通知 */}
-                <div className="bg-gray-50 border border-gray-200 rounded-xl px-5 py-5 space-y-4">
+                <div className="bg-gray-50 border border-gray-200 rounded-xl px-5 py-4 space-y-3">
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">⚠️ テスト通知を送信</p>
-                    <p className="text-xs text-gray-500 mt-1">ボタンを押すと5秒後に利益率警戒の通知が届きます</p>
+                    <p className="text-sm font-semibold text-gray-900">テスト通知を送信</p>
+                    <p className="text-xs text-gray-500 mt-0.5">ボタンを押すと5秒後に通知が届きます</p>
                   </div>
                   <button onClick={sendTestNotification}
                     disabled={notifPermission !== "granted" || testCountdown !== null}
-                    className="w-full py-4 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-40
-                      bg-amber-500 hover:bg-amber-600 text-white shadow shadow-amber-200">
+                    className="w-full py-3.5 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-40
+                      bg-amber-500 text-white shadow shadow-amber-200">
                     {testCountdown !== null ? `🔔 ${testCountdown}秒後に送信...` : "🔔 5秒後にテスト通知を送る"}
                   </button>
                 </div>
@@ -376,7 +395,7 @@ export default function AppleIcon() {
                   <p className="font-bold">📱 iPhone でプッシュ通知を受け取るには</p>
                   <p>① iOS 16.4 以上が必要です</p>
                   <p>② Safariでこのサイトを開く → 「共有」→「ホーム画面に追加」</p>
-                  <p>③ ホーム画面のアイコンからアプリを起動 → 通知を許可</p>
+                  <p>③ ホーム画面のアイコンからアプリを起動 → 通知トグルをONに</p>
                 </div>
               </>
             )}

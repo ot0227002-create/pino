@@ -295,6 +295,7 @@ export function EditProjectClient({ id }: { id: string }) {
 
         {/* ── メモ ── */}
         <FormSection title="メモ">
+          <TemplatePicker onSelect={(t) => setMemo(v => v ? v + "\n" + t : t)} />
           <textarea
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
@@ -450,6 +451,7 @@ export function EditProjectClient({ id }: { id: string }) {
 
         {/* ── 現場メモ ── */}
         <FormSection title="現場状況メモ">
+          <TemplatePicker onSelect={(t) => setSiteMemo(v => v ? v + "\n" + t : t)} />
           <textarea
             value={siteMemo}
             onChange={(e) => setSiteMemo(e.target.value)}
@@ -488,6 +490,32 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
     <div className="flex items-center justify-between gap-4 py-2.5">
       <span className="text-sm text-gray-500 shrink-0">{label}</span>
       <div className="flex-1 min-w-0">{children}</div>
+    </div>
+  );
+}
+
+const MEMO_TEMPLATES = [
+  "不在・留守電",
+  "現調完了・見積へ",
+  "追加工事発生",
+  "完工・引き渡し",
+  "工事開始",
+  "要確認",
+];
+
+function TemplatePicker({ onSelect }: { onSelect: (text: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1.5 pb-2.5 pt-1">
+      {MEMO_TEMPLATES.map((t) => (
+        <button
+          key={t}
+          type="button"
+          onClick={() => onSelect(t)}
+          className="text-xs bg-blue-50 text-blue-700 border border-blue-100 rounded-full px-3 py-1 active:bg-blue-100 transition-colors"
+        >
+          {t}
+        </button>
+      ))}
     </div>
   );
 }
