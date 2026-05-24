@@ -5,16 +5,16 @@ import FaviconPersistence from "@/components/ui/FaviconPersistence";
 
 export const metadata: Metadata = {
   title: {
-    default: "PRO-MANAGEMENT",
-    template: "%s | PRO-MANAGEMENT",
+    default: "こばかいアプリ",
+    template: "%s | こばかいアプリ",
   },
   description: "リフォーム・工事会社向け案件・利益管理アプリ",
-  applicationName: "PRO-MANAGEMENT",
+  applicationName: "こばかいアプリ",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "PRO-MGMT",
+    title: "こばかいアプリ",
   },
 };
 

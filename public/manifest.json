@@ -1,12 +1,12 @@
 {
-  "name": "PRO-MANAGEMENT",
-  "short_name": "PRO-MGMT",
+  "name": "こばかいアプリ",
+  "short_name": "こばかい",
   "description": "リフォーム・工事会社向け案件・利益管理アプリ",
   "start_url": "/projects",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0d1117",
-  "theme_color": "#0d1117",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
   "icons": [
     {
       "src": "/icon-192.png",
