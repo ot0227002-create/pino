@@ -3,11 +3,12 @@ import { getProjectWithDetails } from "@/lib/mock-data";
 import { ProjectDetailClient } from "./ProjectDetailClient";
 
 interface Props {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
-export default function ProjectDetailPage({ params }: Props) {
-  const project = getProjectWithDetails(params.id);
+export default async function ProjectDetailPage({ params }: Props) {
+  const { id } = await params;
+  const project = getProjectWithDetails(id);
   if (!project) notFound();
   return <ProjectDetailClient project={project} />;
 }
