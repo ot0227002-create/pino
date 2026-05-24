@@ -18,6 +18,7 @@ function getMonthKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 function getProjectMonth(p: ProjectWithDetails) {
+  if (p.target_month) return p.target_month;
   return getMonthKey(new Date(p.updated_at ?? p.created_at));
 }
 function fmtCurrency(n: number) {
@@ -148,7 +149,7 @@ export function SummaryClient() {
   const isCurrentMonth = selectedMonth === currentMonthKey;
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-gray-50 pb-40">
       <header className="bg-white border-b border-gray-200 px-4 h-14 flex items-center">
         <h1 className="text-lg font-bold text-gray-900">サマリー</h1>
       </header>

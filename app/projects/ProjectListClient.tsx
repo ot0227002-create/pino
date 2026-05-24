@@ -110,8 +110,10 @@ export function ProjectListClient() {
   const trendData = useMemo(() => {
     const byMonth: Record<string, number> = {};
     activeProjects.forEach(p => {
-      const d = new Date(p.updated_at ?? p.created_at);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const key = p.target_month ?? (() => {
+        const d = new Date(p.updated_at ?? p.created_at);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      })();
       byMonth[key] = (byMonth[key] ?? 0) + (p.profit?.profit ?? 0);
     });
     return Object.entries(byMonth)
@@ -244,7 +246,7 @@ export function ProjectListClient() {
         </aside>
 
         {/* 案件リスト */}
-        <main className="flex-1 px-4 py-4 space-y-3 pb-36">
+        <main className="flex-1 px-4 py-4 space-y-3 pb-44">
           {loading ? (
             <LoadingSpinner />
           ) : filtered.length === 0 ? (

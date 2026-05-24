@@ -39,6 +39,7 @@ export interface Project {
   next_action_date: string | null;  // 次回アクション日 (ISO date)
   drawing_url: string | null;       // 図面ファイルURL
   work_type: WorkType;             // 工種
+  target_month: string | null;     // 対象月 (YYYY-MM)
   created_at: string;              // 作成日時 (ISO)
   updated_at: string;              // 更新日時 (ISO)
 }

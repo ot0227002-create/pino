@@ -31,9 +31,14 @@ export function ProjectCard({ project }: Props) {
             <p className="text-base font-bold text-gray-900 truncate">
               {project.customer_name}
             </p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {WORK_TYPE_LABEL[project.work_type]}
-            </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-xs text-gray-400">{WORK_TYPE_LABEL[project.work_type]}</p>
+              {project.target_month && (
+                <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5 leading-none">
+                  {project.target_month.replace(/^(\d{4})-0?(\d+)$/, "$2月")}
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <StatusBadge status={project.status} />

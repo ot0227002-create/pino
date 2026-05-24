@@ -17,6 +17,22 @@ import {
 
 const WORK_TYPES: WorkType[] = ["reform", "exterior", "interior"];
 
+function currentMonthKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function getMonthOptions() {
+  const opts: { value: string; label: string }[] = [];
+  const now = new Date();
+  for (let i = -12; i <= 3; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    opts.push({ value: key, label: `${d.getFullYear()}年${d.getMonth() + 1}月` });
+  }
+  return opts;
+}
+
 export default function NewProjectPage() {
   const router = useRouter();
   const [customerName, setCustomerName] = useState("");
@@ -24,6 +40,7 @@ export default function NewProjectPage() {
   const [address, setAddress] = useState("");
   const [workType, setWorkType] = useState<WorkType>("reform");
   const [status, setStatus] = useState<SalesStatus>("new_inquiry");
+  const [targetMonth, setTargetMonth] = useState(currentMonthKey());
   const [nextActionDate, setNextActionDate] = useState("");
   const [memo, setMemo] = useState("");
   const [saving, setSaving] = useState(false);
@@ -43,6 +60,7 @@ export default function NewProjectPage() {
             address,
             work_type: workType,
             status,
+            target_month: targetMonth,
             next_action_date: nextActionDate || null,
             memo: memo || null,
             created_at: now,
@@ -143,6 +161,22 @@ export default function NewProjectPage() {
                 {WORK_TYPE_LABEL[wt]}
               </button>
             ))}
+          </div>
+        </section>
+
+        {/* ── 対象月 ── */}
+        <section className="space-y-2">
+          <p className="text-xs font-semibold text-gray-500 px-1">対象月</p>
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+            <select
+              value={targetMonth}
+              onChange={(e) => setTargetMonth(e.target.value)}
+              className="w-full px-4 py-3.5 text-sm text-gray-900 bg-transparent focus:outline-none"
+            >
+              {getMonthOptions().map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
           </div>
         </section>
 
