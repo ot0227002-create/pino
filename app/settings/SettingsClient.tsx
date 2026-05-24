@@ -51,13 +51,23 @@ export function SettingsClient() {
   // 通知
   const [swStatus, setSwStatus] = useState<"checking"|"unsupported"|"registered"|"error">("checking");
   const [notifPermission, setNotifPermission] = useState<string>("default");
-  const [testCountdown, setTestCountdown] = useState<number | null>(null);
+  const [notifProgress, setNotifProgress] = useState(true);
+  const [notifTask, setNotifTask] = useState(true);
+  const [notifProfit, setNotifProfit] = useState(true);
+  const [testProgressCountdown, setTestProgressCountdown] = useState<number | null>(null);
+  const [testTaskCountdown, setTestTaskCountdown] = useState<number | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     // ログイン時刻
     const raw = localStorage.getItem("loginTime");
     if (raw) setLoginTime(Number(raw));
+    const np  = localStorage.getItem("notifProgress");
+    const nt  = localStorage.getItem("notifTask");
+    const npr = localStorage.getItem("notifProfit");
+    if (np  !== null) setNotifProgress(np  === "true");
+    if (nt  !== null) setNotifTask(nt  === "true");
+    if (npr !== null) setNotifProfit(npr === "true");
     // Service Worker & 通知
     if (!("serviceWorker" in navigator) || !("Notification" in window)) {
       setSwStatus("unsupported"); return;
@@ -152,20 +162,44 @@ export default function AppleIcon() {
     setNotifPermission(perm);
   }
 
-  async function sendTestNotification() {
+  function toggleNotif(key: "notifProgress"|"notifTask"|"notifProfit", setter: (v: boolean) => void, current: boolean) {
+    const v = !current;
+    setter(v);
+    localStorage.setItem(key, String(v));
+  }
+
+  async function sendProgressTest() {
     if (notifPermission !== "granted") { alert("先に通知を許可してください"); return; }
     let count = 5;
-    setTestCountdown(count);
+    setTestProgressCountdown(count);
     const iv = setInterval(async () => {
       count--;
-      if (count > 0) { setTestCountdown(count); } else {
-        clearInterval(iv); setTestCountdown(null);
+      if (count > 0) { setTestProgressCountdown(count); } else {
+        clearInterval(iv); setTestProgressCountdown(null);
         const iconUrl = faviconDataUrl || "/icon-192.png";
-        const body = "⚠️ 利益率警戒: 山田様邸の利益率が18%に低下しています";
+        const body = "⚠️進捗追い漏れ: 田中様の見積提出から1週間が経過しています";
         try {
           const reg = await navigator.serviceWorker.ready;
-          await reg.showNotification("PRO-MANAGEMENT ⚠️", { body, icon: iconUrl, vibrate: [200, 100, 200, 100, 200] } as NotificationOptions);
-        } catch { new Notification("PRO-MANAGEMENT ⚠️", { body, icon: iconUrl }); }
+          await reg.showNotification("こばかいアプリ ⚠️", { body, icon: iconUrl, vibrate: [200, 100, 200, 100, 200] } as NotificationOptions);
+        } catch { new Notification("こばかいアプリ ⚠️", { body, icon: iconUrl }); }
+      }
+    }, 1000);
+  }
+
+  async function sendTaskTest() {
+    if (notifPermission !== "granted") { alert("先に通知を許可してください"); return; }
+    let count = 5;
+    setTestTaskCountdown(count);
+    const iv = setInterval(async () => {
+      count--;
+      if (count > 0) { setTestTaskCountdown(count); } else {
+        clearInterval(iv); setTestTaskCountdown(null);
+        const iconUrl = faviconDataUrl || "/icon-192.png";
+        const body = "📅タスク未完了: 本日予定の山田様邸現地調査が未対応です";
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          await reg.showNotification("こばかいアプリ 📅", { body, icon: iconUrl, vibrate: [200, 100, 200, 100, 200] } as NotificationOptions);
+        } catch { new Notification("こばかいアプリ 📅", { body, icon: iconUrl }); }
       }
     }, 1000);
   }
@@ -322,7 +356,7 @@ export default function AppleIcon() {
               <>
                 <h2 className="text-base font-bold text-gray-900 border-l-4 border-blue-500 pl-3">プッシュ通知設定</h2>
 
-                {/* ─ メイントグル ─ */}
+                {/* ─ マスタートグル ─ */}
                 <div className={`rounded-2xl border-2 px-5 py-5 flex items-center justify-between transition-colors ${
                   notifPermission === "granted"
                     ? "border-emerald-200 bg-emerald-50"
@@ -340,7 +374,6 @@ export default function AppleIcon() {
                       {notifPermission === "default" && "OFF — タップして有効にする"}
                     </p>
                   </div>
-                  {/* トグルスイッチ */}
                   <button
                     onClick={notifPermission === "default" ? requestPermission : undefined}
                     disabled={notifPermission === "denied"}
@@ -361,13 +394,81 @@ export default function AppleIcon() {
                   </div>
                 )}
 
-                {/* SW ステータス */}
+                {/* ─ 通知の種類 ─ */}
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">通知の種類</p>
+                  {([
+                    {
+                      key: "notifProgress" as const,
+                      val: notifProgress,
+                      setter: setNotifProgress,
+                      label: "案件進捗の追い漏れアラート",
+                      desc: "ステータスが長期間変わっていない案件をお知らせ",
+                    },
+                    {
+                      key: "notifTask" as const,
+                      val: notifTask,
+                      setter: setNotifTask,
+                      label: "タスクの追い漏れアラート",
+                      desc: "次回対応予定日を過ぎた未対応案件をお知らせ",
+                    },
+                    {
+                      key: "notifProfit" as const,
+                      val: notifProfit,
+                      setter: setNotifProfit,
+                      label: "利益率警戒アラート",
+                      desc: "利益率が設定値を下回った案件をお知らせ",
+                    },
+                  ] as const).map(({ key, val, setter, label, desc }) => (
+                    <div key={key} className={`rounded-2xl border px-5 py-4 flex items-start justify-between gap-3 transition-colors ${
+                      val && notifPermission === "granted"
+                        ? "border-emerald-200 bg-emerald-50"
+                        : "border-gray-200 bg-gray-50"
+                    }`}>
+                      <div className="space-y-0.5 flex-1">
+                        <p className="text-sm font-semibold text-gray-900">{label}</p>
+                        <p className="text-xs text-gray-500">{desc}</p>
+                      </div>
+                      <button
+                        onClick={() => toggleNotif(key, setter, val)}
+                        disabled={notifPermission !== "granted"}
+                        className={`relative h-7 w-12 rounded-full shrink-0 transition-colors duration-200 disabled:opacity-40 ${
+                          val && notifPermission === "granted" ? "bg-emerald-500" : "bg-gray-300"
+                        }`}
+                      >
+                        <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ${
+                          val ? "translate-x-5" : "translate-x-0.5"
+                        }`} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ─ テスト通知 ─ */}
+                <div className="bg-gray-50 border border-gray-200 rounded-xl px-5 py-4 space-y-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">テスト通知</p>
+                    <p className="text-xs text-gray-500 mt-0.5">ボタンを押すと5秒後に実際のアラートが届きます</p>
+                  </div>
+                  <button onClick={sendProgressTest}
+                    disabled={notifPermission !== "granted" || testProgressCountdown !== null || testTaskCountdown !== null}
+                    className="w-full py-3 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-40 bg-amber-500 text-white shadow shadow-amber-200">
+                    {testProgressCountdown !== null ? `⚠️ ${testProgressCountdown}秒後に送信...` : "⚠️ 進捗の追い漏れテスト"}
+                  </button>
+                  <button onClick={sendTaskTest}
+                    disabled={notifPermission !== "granted" || testProgressCountdown !== null || testTaskCountdown !== null}
+                    className="w-full py-3 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-40 bg-blue-500 text-white shadow shadow-blue-200">
+                    {testTaskCountdown !== null ? `📅 ${testTaskCountdown}秒後に送信...` : "📅 タスクの追い漏れテスト"}
+                  </button>
+                </div>
+
+                {/* ─ SW ステータス ─ */}
                 <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
                   <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Service Worker</p>
                   <p className={`text-xs font-semibold ${
                     swStatus === "registered"   ? "text-emerald-600"
                     : swStatus === "unsupported" ? "text-red-500"
-                    : swStatus === "error"        ? "text-amber-500"
+                    : swStatus === "error"       ? "text-amber-500"
                     : "text-gray-400"
                   }`}>
                     {swStatus === "registered"   && "✅ 登録済み — バックグラウンド通知が有効"}
@@ -375,20 +476,6 @@ export default function AppleIcon() {
                     {swStatus === "error"        && "⚠️ 登録エラー（開発環境では正常）"}
                     {swStatus === "checking"     && "確認中..."}
                   </p>
-                </div>
-
-                {/* テスト通知 */}
-                <div className="bg-gray-50 border border-gray-200 rounded-xl px-5 py-4 space-y-3">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">テスト通知を送信</p>
-                    <p className="text-xs text-gray-500 mt-0.5">ボタンを押すと5秒後に通知が届きます</p>
-                  </div>
-                  <button onClick={sendTestNotification}
-                    disabled={notifPermission !== "granted" || testCountdown !== null}
-                    className="w-full py-3.5 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-40
-                      bg-amber-500 text-white shadow shadow-amber-200">
-                    {testCountdown !== null ? `🔔 ${testCountdown}秒後に送信...` : "🔔 5秒後にテスト通知を送る"}
-                  </button>
                 </div>
 
                 {/* iOS補足 */}
