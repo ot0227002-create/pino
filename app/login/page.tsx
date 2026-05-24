@@ -21,13 +21,16 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const res = await fetch("/api/auth", {
+      const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
       });
 
       if (res.ok) {
+        const data = await res.json();
+        // ログイン時刻をクライアント側に保存 → 24時間セッション管理に使用
+        localStorage.setItem("loginTime", String(data.loginTime ?? Date.now()));
         router.push("/projects");
         router.refresh();
       } else {

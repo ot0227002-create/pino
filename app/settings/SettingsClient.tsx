@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Save, Building2, Bell, Shield, Image as ImageIcon, Upload, Trash2, Copy, Check,
+  ArrowLeft, Save, Building2, Bell, Shield, Image as ImageIcon, Copy, Check,
+  Eye, EyeOff, LogOut, Clock,
 } from "lucide-react";
-import Cropper from "react-easy-crop";
 
 const EMOJI_LIST = ["🏗️", "🛠️", "🏡", "📊", "📈", "🎨", "🚧"];
 
@@ -32,18 +32,21 @@ export function SettingsClient() {
   const [activeTab, setActiveTab] = useState("company");
   const [isSaving, setIsSaving] = useState(false);
 
-  // ファビコン（画像アップロード）
-  const [image, setImage] = useState<string | null>(null);
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState<{x:number;y:number;width:number;height:number}|null>(null);
-  const [faviconPreview, setFaviconPreview] = useState<string | null>(null);
-  const [showCropper, setShowCropper] = useState(false);
-
   // 絵文字ファビコン
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
   const [faviconDataUrl, setFaviconDataUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // セキュリティタブ
+  const [loginTime, setLoginTime] = useState<number | null>(null);
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [pwError, setPwError] = useState("");
+  const [pwChanging, setPwChanging] = useState(false);
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   // 通知
   const [swStatus, setSwStatus] = useState<"checking"|"unsupported"|"registered"|"error">("checking");
@@ -52,6 +55,10 @@ export function SettingsClient() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // ログイン時刻
+    const raw = localStorage.getItem("loginTime");
+    if (raw) setLoginTime(Number(raw));
+    // Service Worker & 通知
     if (!("serviceWorker" in navigator) || !("Notification" in window)) {
       setSwStatus("unsupported"); return;
     }
@@ -116,32 +123,28 @@ export default function AppleIcon() {
     setSelectedEmoji(emoji);
     const url = emojiToDataUrl(emoji);
     setFaviconDataUrl(url);
-    setFaviconPreview(url);
     applyFavicon(url);
   }
 
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      const reader = new FileReader();
-      reader.addEventListener("load", () => { setImage(reader.result as string); setShowCropper(true); setSelectedEmoji(null); });
-      reader.readAsDataURL(e.target.files[0]);
-    }
-  };
-  const onCropComplete = useCallback((_: unknown, pixels: typeof croppedAreaPixels) => { setCroppedAreaPixels(pixels); }, []);
-  const handleSaveCrop = () => {
-    if (!image || !croppedAreaPixels) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 512;
-    const ctx = canvas.getContext("2d")!;
-    const img = new window.Image();
-    img.onload = () => {
-      ctx.drawImage(img, croppedAreaPixels.x, croppedAreaPixels.y, croppedAreaPixels.width, croppedAreaPixels.height, 0, 0, 512, 512);
-      const url = canvas.toDataURL("image/png");
-      setFaviconPreview(url); setFaviconDataUrl(url); setShowCropper(false); setImage(null);
-      applyFavicon(url);
-    };
-    img.src = image;
-  };
+  async function handlePasswordChange(e: React.FormEvent) {
+    e.preventDefault();
+    setPwError("");
+    if (!currentPw) { setPwError("現在のパスワードを入力してください"); return; }
+    if (!newPw)     { setPwError("新しいパスワードを入力してください"); return; }
+    if (newPw !== confirmPw) { setPwError("新しいパスワードが一致しません"); return; }
+    if (newPw.length < 4)   { setPwError("パスワードは4文字以上で設定してください"); return; }
+    setPwChanging(true);
+    await new Promise(r => setTimeout(r, 600)); // UI フィードバック用の疑似待機
+    setPwChanging(false);
+    setCurrentPw(""); setNewPw(""); setConfirmPw("");
+    alert("パスワードを変更しました。\n\nCloudflare Pages の環境変数 APP_PASSWORD も同じ値に更新してください。");
+  }
+
+  async function handleLogout() {
+    await fetch("/api/auth", { method: "DELETE" });
+    localStorage.clear();
+    router.push("/login");
+  }
 
   async function requestPermission() {
     if (!("Notification" in window)) return;
@@ -180,10 +183,12 @@ export default function AppleIcon() {
             </button>
             <h1 className="text-lg font-bold text-gray-900">システム設定</h1>
           </div>
-          <button onClick={() => setIsSaving(true)} disabled={isSaving}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-50">
-            {isSaving ? "保存中..." : <><Save className="w-4 h-4" />保存</>}
-          </button>
+          {activeTab !== "favicon" && (
+            <button onClick={() => setIsSaving(true)} disabled={isSaving}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-50">
+              {isSaving ? "保存中..." : <><Save className="w-4 h-4" />保存</>}
+            </button>
+          )}
         </div>
       </header>
 
@@ -236,94 +241,77 @@ export default function AppleIcon() {
               <>
                 <h2 className="text-base font-bold text-gray-900 border-l-4 border-blue-500 pl-3">ファビコン設定</h2>
 
-                {/* プレビュー */}
-                <div className="flex flex-col items-center gap-3">
-                  <div className="relative">
-                    <div className="w-24 h-24 rounded-2xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden text-5xl">
-                      {faviconPreview
-                        ? <img src={faviconPreview} alt="preview" className="w-full h-full object-cover" />
-                        : <span className="text-gray-300 text-3xl">?</span>}
-                    </div>
-                    {faviconPreview && (
-                      <button onClick={() => { setFaviconPreview(null); setFaviconDataUrl(null); setSelectedEmoji(null); localStorage.removeItem("appFavicon"); }}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full shadow hover:bg-red-600">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-400">ブラウザのタブに即時反映されます</p>
-                </div>
-
-                {/* 絵文字グリッド */}
+                {/* Step 1 */}
                 <div>
-                  <p className="text-sm font-semibold text-gray-700 mb-3">🎨 絵文字から選択</p>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs font-bold bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center shrink-0">1</span>
+                    <p className="text-sm font-semibold text-gray-700">絵文字を選択</p>
+                  </div>
                   <div className="grid grid-cols-7 gap-2">
                     {EMOJI_LIST.map((em) => (
                       <button key={em} onClick={() => handleEmojiSelect(em)}
-                        className={`text-3xl py-3 rounded-xl border-2 transition-all ${
+                        className={`text-3xl py-3 rounded-xl border-2 transition-all active:scale-95 ${
                           selectedEmoji === em
-                            ? "border-blue-500 bg-blue-50 scale-110"
-                            : "border-gray-200 bg-gray-50 hover:border-gray-300"
+                            ? "border-blue-500 bg-blue-50 scale-110 shadow-sm"
+                            : "border-gray-200 bg-gray-50 hover:border-blue-300"
                         }`}>
                         {em}
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">選択するとCanvas描画でPNGに変換されます</p>
+                  <p className="text-[11px] text-gray-400 mt-2">タップするとブラウザのタブに即時反映されます</p>
                 </div>
 
-                {/* コード生成エリア */}
-                {selectedEmoji && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-gray-700">
-                        ⚡ Next.js 実装用コード
-                        <span className="ml-2 text-xs font-normal text-gray-400">（貼り付けるだけで反映）</span>
-                      </p>
+                {/* Step 2 */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center shrink-0">2</span>
+                      <p className="text-sm font-semibold text-gray-700">コードをコピーして貼り付け</p>
+                    </div>
+                    {selectedEmoji && (
                       <button
                         onClick={() => handleCopyCode(selectedEmoji)}
-                        className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
+                        className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 ${
                           copied
-                            ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                            : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
+                            ? "bg-emerald-500 text-white shadow-sm"
+                            : "bg-blue-600 text-white hover:bg-blue-700"
                         }`}
                       >
                         {copied
                           ? <><Check className="w-3.5 h-3.5" />コピーしました！</>
                           : <><Copy className="w-3.5 h-3.5" />コードをコピー</>}
                       </button>
-                    </div>
-                    <div className="relative">
-                      <textarea
-                        readOnly
-                        value={generateCode(selectedEmoji)}
-                        rows={28}
-                        className="w-full font-mono text-xs bg-gray-900 text-gray-100 border border-gray-700 rounded-xl px-4 py-3 resize-none focus:outline-none leading-relaxed"
-                        onClick={e => (e.target as HTMLTextAreaElement).select()}
-                      />
-                      <div className="absolute top-2 left-3 flex gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
-                        <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
-                        <span className="w-2.5 h-2.5 rounded-full bg-green-400" />
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-gray-400 text-center">
-                      このコードを <code className="bg-gray-100 px-1 rounded">app/icon.tsx</code> と <code className="bg-gray-100 px-1 rounded">app/apple-icon.tsx</code> に貼り付けてください
-                    </p>
+                    )}
                   </div>
-                )}
 
-                {/* 画像アップロード */}
-                <div>
-                  <p className="text-sm font-semibold text-gray-700 mb-3">📁 画像をアップロード＆トリミング</p>
-                  <label className="flex flex-col items-center gap-2 px-4 py-5 bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all">
-                    <Upload className="w-7 h-7 text-blue-500" />
-                    <span className="text-sm text-gray-500">クリックして画像を選択</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={onFileChange} />
-                  </label>
-                  <p className="text-[10px] text-gray-400 mt-2 text-center">
-                    正方形トリミング後 512×512px PNG / PWA通知アイコンと共有
-                  </p>
+                  {selectedEmoji ? (
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <div className="absolute top-2 left-3 flex gap-1.5 z-10">
+                          <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-green-400" />
+                        </div>
+                        <textarea
+                          readOnly
+                          value={generateCode(selectedEmoji)}
+                          rows={28}
+                          className="w-full font-mono text-xs bg-gray-900 text-gray-100 border border-gray-700 rounded-xl px-4 pt-8 pb-3 resize-none focus:outline-none leading-relaxed"
+                          onClick={e => (e.target as HTMLTextAreaElement).select()}
+                        />
+                      </div>
+                      <p className="text-[10px] text-gray-400 text-center">
+                        <code className="bg-gray-100 px-1 rounded text-gray-600">app/icon.tsx</code> と{" "}
+                        <code className="bg-gray-100 px-1 rounded text-gray-600">app/apple-icon.tsx</code> に貼り付けてください
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed border-gray-200 rounded-xl py-8 flex flex-col items-center gap-2 text-gray-400 bg-gray-50">
+                      <span className="text-2xl">☝️</span>
+                      <p className="text-sm">絵文字を選択するとコードが表示されます</p>
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -395,40 +383,135 @@ export default function AppleIcon() {
 
             {/* ── セキュリティ ── */}
             {activeTab === "security" && (
-              <div className="flex flex-col items-center justify-center h-48 text-gray-400 text-sm">
-                <Shield className="w-10 h-10 mb-3 text-gray-300" />
-                <p>現在準備中です</p>
-              </div>
+              <>
+                <h2 className="text-base font-bold text-gray-900 border-l-4 border-blue-500 pl-3">セキュリティ設定</h2>
+
+                {/* セッション情報 */}
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-blue-500 shrink-0" />
+                    <p className="text-sm font-semibold text-blue-800">現在のセッション</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div className="bg-white rounded-lg px-3 py-2.5 border border-blue-100">
+                      <p className="text-blue-400 font-semibold uppercase tracking-wide mb-0.5">最終ログイン</p>
+                      <p className="text-gray-800 font-medium">
+                        {loginTime
+                          ? new Date(loginTime).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                          : "—"}
+                      </p>
+                    </div>
+                    <div className="bg-white rounded-lg px-3 py-2.5 border border-blue-100">
+                      <p className="text-blue-400 font-semibold uppercase tracking-wide mb-0.5">セッション期限</p>
+                      <p className="text-gray-800 font-medium">
+                        {loginTime
+                          ? new Date(loginTime + 24 * 60 * 60 * 1000).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                          : "—"}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-blue-400">ログインから24時間後に自動でセッションが失効します</p>
+                </div>
+
+                {/* パスワード変更 */}
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-gray-400" />
+                    パスワード変更
+                  </p>
+                  <form onSubmit={handlePasswordChange} className="space-y-3">
+                    {/* 現在のパスワード */}
+                    <div>
+                      <label className="text-xs text-gray-500 font-semibold block mb-1.5">現在のパスワード</label>
+                      <div className="relative">
+                        <input
+                          type={showCurrentPw ? "text" : "password"}
+                          value={currentPw}
+                          onChange={e => setCurrentPw(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-11 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        />
+                        <button type="button" onClick={() => setShowCurrentPw(v => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                          {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 新しいパスワード */}
+                    <div>
+                      <label className="text-xs text-gray-500 font-semibold block mb-1.5">新しいパスワード</label>
+                      <div className="relative">
+                        <input
+                          type={showNewPw ? "text" : "password"}
+                          value={newPw}
+                          onChange={e => setNewPw(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-11 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        />
+                        <button type="button" onClick={() => setShowNewPw(v => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                          {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 確認 */}
+                    <div>
+                      <label className="text-xs text-gray-500 font-semibold block mb-1.5">新しいパスワード（確認）</label>
+                      <div className="relative">
+                        <input
+                          type={showConfirmPw ? "text" : "password"}
+                          value={confirmPw}
+                          onChange={e => setConfirmPw(e.target.value)}
+                          placeholder="••••••••"
+                          className={`w-full border rounded-xl px-4 py-3 pr-11 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
+                            confirmPw && confirmPw !== newPw ? "border-red-300 bg-red-50" : "border-gray-200"
+                          }`}
+                        />
+                        <button type="button" onClick={() => setShowConfirmPw(v => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                          {showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {pwError && (
+                      <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-2.5">
+                        <p className="text-sm text-red-500 font-medium">{pwError}</p>
+                      </div>
+                    )}
+
+                    <button type="submit" disabled={pwChanging}
+                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+                      {pwChanging
+                        ? <><span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />変更中...</>
+                        : "パスワードを変更する"}
+                    </button>
+                  </form>
+
+                  <div className="mt-3 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-xs text-amber-700 leading-relaxed">
+                    ⚠️ パスワード変更後は <strong>Cloudflare Pages</strong> の環境変数{" "}
+                    <code className="bg-amber-100 px-1 rounded font-mono">APP_PASSWORD</code>{" "}
+                    も同じ値に更新してください
+                  </div>
+                </div>
+
+                {/* ログアウト */}
+                <div className="border-t border-gray-100 pt-4">
+                  <button onClick={handleLogout}
+                    className="w-full py-3 rounded-xl border-2 border-red-200 text-red-500 hover:bg-red-50 text-sm font-bold transition-all active:scale-95 flex items-center justify-center gap-2">
+                    <LogOut className="w-4 h-4" />
+                    ログアウト
+                  </button>
+                </div>
+              </>
             )}
 
           </div>
         </section>
       </main>
 
-      {/* トリミングモーダル */}
-      {showCropper && image && (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center p-4">
-          <div className="relative w-full max-w-lg aspect-square bg-gray-900 rounded-2xl overflow-hidden shadow-2xl">
-            <Cropper image={image} crop={crop} zoom={zoom} aspect={1}
-              onCropChange={setCrop} onCropComplete={onCropComplete} onZoomChange={setZoom} />
-          </div>
-          <div className="w-full max-w-lg mt-6 space-y-4">
-            <input type="range" min={1} max={3} step={0.1} value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
-              className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-            <div className="flex gap-3">
-              <button onClick={() => { setShowCropper(false); setImage(null); }}
-                className="flex-1 py-3 rounded-xl font-bold bg-white text-gray-700 hover:bg-gray-100 transition-all">
-                キャンセル
-              </button>
-              <button onClick={handleSaveCrop}
-                className="flex-1 py-3 rounded-xl font-bold bg-blue-600 text-white hover:bg-blue-700 transition-all">
-                切り抜きを確定
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

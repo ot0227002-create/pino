@@ -26,6 +26,8 @@ import { formatCurrency } from "@/lib/profit";
 import { cn } from "@/lib/utils";
 import {
   WORK_TYPE_LABEL,
+  SALES_STATUS_LABEL,
+  SALES_STATUS_ORDER,
   type SalesStatus,
   type ProjectWithDetails,
   type ProjectImage,
@@ -180,6 +182,28 @@ export function ProjectDetailClient({ id }: { id: string }) {
           >
             ステータスを変更
           </button>
+        </div>
+
+        {/* 営業進捗ステップバー */}
+        <div className="bg-white border-b border-gray-100 px-4 pt-3 pb-2.5">
+          <div className="flex gap-0.5 mb-1.5">
+            {SALES_STATUS_ORDER.map((step, idx) => {
+              const cur = SALES_STATUS_ORDER.indexOf(project.status);
+              return (
+                <div key={step} className={`flex-1 h-1.5 rounded-full transition-colors ${
+                  idx < cur ? "bg-blue-400" : idx === cur ? "bg-blue-600" : "bg-gray-200"
+                }`} />
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-gray-400">
+              ステップ {SALES_STATUS_ORDER.indexOf(project.status) + 1}/{SALES_STATUS_ORDER.length}
+            </span>
+            <span className="text-xs font-semibold text-blue-700">
+              {SALES_STATUS_LABEL[project.status]}
+            </span>
+          </div>
         </div>
 
         {/* タブ */}

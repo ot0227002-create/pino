@@ -3,9 +3,11 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, LogOut, Target, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Search, LogOut, ChevronDown, ChevronUp } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  AreaChart, Area,
+  BarChart, Bar,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 import { ProjectCard } from "@/components/project/ProjectCard";
 import { StatusFilter } from "@/components/project/StatusFilter";
@@ -35,25 +37,9 @@ export function ProjectListClient() {
   const [query, setQuery] = useState("");
   const [summaryOpen, setSummaryOpen] = useState(false); // mobile collapse
 
-  // 目標利益（localStorage 永続化）
-  const [goalInput, setGoalInput] = useState("");
-  const [goal, setGoal] = useState<number>(0);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("profitGoal");
-    if (saved) { setGoal(Number(saved)); setGoalInput(saved); }
-  }, []);
-
-  function applyGoal() {
-    const v = Number(goalInput.replace(/,/g, "").replace(/万/g, "0000"));
-    if (!isNaN(v) && v >= 0) {
-      setGoal(v);
-      localStorage.setItem("profitGoal", String(v));
-    }
-  }
-
   async function handleLogout() {
     await fetch("/api/auth", { method: "DELETE" });
+    localStorage.clear();
     router.push("/login");
   }
 
@@ -107,9 +93,8 @@ export function ProjectListClient() {
   const totalProfit  = useMemo(() =>
     activeProjects.reduce((s, p) => s + (p.profit?.profit ?? 0), 0), [activeProjects]);
   const avgRate = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
-  const achieveRate = goal > 0 ? Math.min((totalProfit / goal) * 100, 100) : 0;
 
-  // 工種別ミニグラフデータ
+  // 工種別棒グラフデータ
   const typeChartData = useMemo(() =>
     WORK_TYPES.map((wt, i) => {
       const ps = activeProjects.filter(p => p.work_type === wt);
@@ -121,74 +106,71 @@ export function ProjectListClient() {
     }).filter(d => d.profit > 0),
   [activeProjects]);
 
+  // 月別利益推移データ（直近6ヶ月）
+  const trendData = useMemo(() => {
+    const byMonth: Record<string, number> = {};
+    activeProjects.forEach(p => {
+      const d = new Date(p.updated_at ?? p.created_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      byMonth[key] = (byMonth[key] ?? 0) + (p.profit?.profit ?? 0);
+    });
+    return Object.entries(byMonth)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-6)
+      .map(([key, profit]) => ({ month: key.slice(5) + "月", profit }));
+  }, [activeProjects]);
+
   // ── サマリーパネル（共通コンテンツ）──
   const SummaryPanel = () => (
     <div className="space-y-4">
-      {/* KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
-        <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
-          <p className="text-[10px] text-blue-400 font-semibold uppercase">売上合計</p>
-          <p className="text-base font-bold text-blue-700">{fmtM(totalRevenue)}</p>
+      {/* KPI 3枚 */}
+      <div className="grid grid-cols-3 lg:grid-cols-1 gap-2">
+        <div className="bg-blue-50 border border-blue-100 rounded-xl px-2.5 py-2">
+          <p className="text-[9px] text-blue-400 font-bold uppercase tracking-wide">売上</p>
+          <p className="text-sm font-bold text-blue-700 leading-tight">{fmtM(totalRevenue)}</p>
         </div>
-        <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5">
-          <p className="text-[10px] text-emerald-400 font-semibold uppercase">利益合計</p>
-          <p className="text-base font-bold text-emerald-700">{fmtM(totalProfit)}</p>
-          <p className="text-[10px] text-emerald-500">{avgRate.toFixed(1)}%</p>
+        <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-2.5 py-2">
+          <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-wide">利益</p>
+          <p className="text-sm font-bold text-emerald-700 leading-tight">{fmtM(totalProfit)}</p>
+        </div>
+        <div className="bg-violet-50 border border-violet-100 rounded-xl px-2.5 py-2">
+          <p className="text-[9px] text-violet-400 font-bold uppercase tracking-wide">利益率</p>
+          <p className="text-sm font-bold text-violet-700 leading-tight">{avgRate.toFixed(1)}%</p>
         </div>
       </div>
 
-      {/* 目標設定 */}
-      <div className="bg-white border border-gray-200 rounded-xl p-3 space-y-2">
-        <div className="flex items-center gap-1.5">
-          <Target className="h-3.5 w-3.5 text-gray-400" />
-          <p className="text-xs font-semibold text-gray-600">今月の目標利益</p>
-        </div>
-        <div className="flex gap-1.5">
-          <input
-            type="text"
-            inputMode="numeric"
-            value={goalInput}
-            onChange={e => setGoalInput(e.target.value)}
-            onBlur={applyGoal}
-            onKeyDown={e => e.key === "Enter" && applyGoal()}
-            placeholder="例: 500000"
-            className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-          />
-          <button onClick={applyGoal}
-            className="text-xs bg-blue-600 text-white px-2.5 py-1.5 rounded-lg font-medium shrink-0">
-            設定
-          </button>
-        </div>
-        {/* 達成率バー */}
-        {goal > 0 && (
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] text-gray-400">達成率</p>
-              <p className={`text-xs font-bold ${achieveRate >= 100 ? "text-emerald-600" : achieveRate >= 70 ? "text-blue-600" : "text-amber-500"}`}>
-                {achieveRate.toFixed(0)}%
-              </p>
-            </div>
-            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  achieveRate >= 100 ? "bg-emerald-500" : achieveRate >= 70 ? "bg-blue-500" : "bg-amber-400"
-                }`}
-                style={{ width: `${achieveRate}%` }}
+      {/* 利益推移 AreaChart */}
+      {trendData.length >= 2 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-3">
+          <p className="text-xs font-semibold text-gray-600 mb-2">利益推移</p>
+          <ResponsiveContainer width="100%" height={90}>
+            <AreaChart data={trendData} margin={{ top: 2, right: 4, left: 4, bottom: 0 }}>
+              <defs>
+                <linearGradient id="profitGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#10b981" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="month" tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+              <YAxis hide />
+              <Tooltip
+                formatter={(v: number) => fmtM(v)}
+                contentStyle={{ fontSize: 11, border: "1px solid #e5e7eb", borderRadius: 6, background: "#fff" }}
               />
-            </div>
-            <p className="text-[10px] text-gray-400 text-right">
-              目標 {fmtM(goal)} / 現在 {fmtM(totalProfit)}
-            </p>
-          </div>
-        )}
-      </div>
+              <Area dataKey="profit" name="利益" type="monotone"
+                stroke="#10b981" strokeWidth={2}
+                fill="url(#profitGrad)" dot={false} activeDot={{ r: 3 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
-      {/* ミニグラフ：工種別利益 */}
+      {/* 工種別棒グラフ */}
       {typeChartData.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl p-3">
           <p className="text-xs font-semibold text-gray-600 mb-2">工種別 利益</p>
-          <ResponsiveContainer width="100%" height={100}>
-            <BarChart data={typeChartData} barCategoryGap="25%">
+          <ResponsiveContainer width="100%" height={80}>
+            <BarChart data={typeChartData} barCategoryGap="30%">
               <XAxis dataKey="name" tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
               <YAxis hide />
               <Tooltip
@@ -203,7 +185,6 @@ export function ProjectListClient() {
         </div>
       )}
 
-      {/* 案件数 */}
       <p className="text-xs text-gray-400 text-center">{projects.length}件の案件</p>
     </div>
   );
@@ -244,7 +225,7 @@ export function ProjectListClient() {
       <div className="lg:hidden bg-white border-b border-gray-200 px-4">
         <button onClick={() => setSummaryOpen(v => !v)}
           className="w-full flex items-center justify-between py-3 text-sm font-semibold text-gray-700">
-          <span>📊 サマリー {goal > 0 ? `— 達成率 ${achieveRate.toFixed(0)}%` : ""}</span>
+          <span>📊 サマリー</span>
           {summaryOpen ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
         </button>
         {summaryOpen && (
