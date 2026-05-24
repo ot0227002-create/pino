@@ -16,6 +16,8 @@ export function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
 
+  if (pathname === "/login") return null;
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100">
       {/* 戻る・進む */}
