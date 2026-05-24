@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FolderOpen, LayoutDashboard, PlusCircle } from "lucide-react";
+import { FolderOpen, LayoutDashboard, PlusCircle, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/projects", icon: FolderOpen, label: "案件" },
   { href: "/projects/new", icon: PlusCircle, label: "新規" },
   { href: "/dashboard", icon: LayoutDashboard, label: "集計" },
+  { href: "/settings", icon: Settings, label: "設定" },
 ];
 
 export function BottomNav() {
