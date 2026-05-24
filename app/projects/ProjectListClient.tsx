@@ -3,11 +3,11 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, LogOut, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Search, LogOut, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Target } from "lucide-react";
 import {
   AreaChart, Area,
   BarChart, Bar,
-  XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend,
 } from "recharts";
 import { ProjectCard } from "@/components/project/ProjectCard";
 import { StatusFilter } from "@/components/project/StatusFilter";
@@ -20,6 +20,14 @@ import type { ProjectWithDetails, SalesStatus, WorkType } from "@/types";
 const WORK_TYPE_LABEL: Record<WorkType, string> = {
   reform: "リフォーム", exterior: "外構", interior: "内装",
 };
+
+function getMonthKey(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+function getProjMonth(p: ProjectWithDetails) {
+  if (p.target_month) return p.target_month;
+  return getMonthKey(new Date(p.updated_at ?? p.created_at));
+}
 const WORK_TYPES: WorkType[] = ["reform", "exterior", "interior"];
 const TYPE_COLORS = ["#3b82f6", "#10b981", "#f59e0b"];
 
@@ -36,6 +44,11 @@ export function ProjectListClient() {
   const [statusFilter, setStatusFilter] = useState<SalesStatus | "all">("all");
   const [query, setQuery] = useState("");
   const [summaryOpen, setSummaryOpen] = useState(false); // mobile collapse
+  // PC左パネル — 月別ダッシュボード
+  const nowKey = useMemo(() => getMonthKey(new Date()), []);
+  const [pcMonth, setPcMonth] = useState(() => getMonthKey(new Date()));
+  const [goalsMap, setGoalsMap] = useState<Record<string, number>>({});
+  const [goalInput, setGoalInput] = useState("");
 
   async function handleLogout() {
     await fetch("/api/auth", { method: "DELETE" });
@@ -43,7 +56,20 @@ export function ProjectListClient() {
     router.push("/login");
   }
 
-  useEffect(() => { router.refresh(); loadProjects(); }, []);
+  useEffect(() => {
+    router.refresh();
+    loadProjects();
+    // 月別目標をロード
+    const goals: Record<string, number> = {};
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+      const key = getMonthKey(d);
+      const v = localStorage.getItem(`monthlyGoal_${key}`);
+      if (v) goals[key] = Number(v);
+    }
+    setGoalsMap(goals);
+    setGoalInput(goals[getMonthKey(new Date())]?.toString() ?? "");
+  }, []);
 
   async function loadProjects() {
     setLoading(true);
@@ -92,7 +118,46 @@ export function ProjectListClient() {
     activeProjects.reduce((s, p) => s + (p.profit?.contract_amount ?? 0), 0), [activeProjects]);
   const totalProfit  = useMemo(() =>
     activeProjects.reduce((s, p) => s + (p.profit?.profit ?? 0), 0), [activeProjects]);
-  const avgRate = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+  const totalCostSum = useMemo(() =>
+    activeProjects.reduce((s, p) => s + (p.profit?.total_cost ?? 0), 0), [activeProjects]);
+  const avgRate = totalCostSum > 0 ? (totalProfit / totalCostSum) * 100 : 0;
+
+  // PC左パネル: 月別計算
+  const [pcY, pcM] = pcMonth.split("-").map(Number);
+  const pcMonthLabel = `${pcY}年${pcM}月`;
+  const pcMonthProjs = useMemo(() =>
+    activeProjects.filter(p => getProjMonth(p) === pcMonth), [activeProjects, pcMonth]);
+  const pcRevenue = pcMonthProjs.reduce((s, p) => s + (p.profit?.contract_amount ?? 0), 0);
+  const pcProfit  = pcMonthProjs.reduce((s, p) => s + (p.profit?.profit ?? 0), 0);
+  const pcCost    = pcMonthProjs.reduce((s, p) => s + (p.profit?.total_cost ?? 0), 0);
+  const pcRate    = pcCost > 0 ? (pcProfit / pcCost) * 100 : 0;
+  const pcGoal    = goalsMap[pcMonth] ?? 0;
+  const pcAchievePct = pcGoal > 0 ? (pcProfit / pcGoal) * 100 : 0;
+  const pc6MData  = useMemo(() =>
+    Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - (5 - i));
+      const key = getMonthKey(d);
+      const ps = activeProjects.filter(p => getProjMonth(p) === key);
+      return {
+        month: `${d.getMonth() + 1}月`,
+        profit: ps.reduce((s, p) => s + (p.profit?.profit ?? 0), 0),
+        goal: goalsMap[key] ?? 0,
+        key,
+      };
+    }), [activeProjects, goalsMap]);
+
+  function pcChangeMonth(delta: number) {
+    const d = new Date(pcY, pcM - 1 + delta, 1);
+    if (getMonthKey(d) > nowKey) return;
+    setPcMonth(getMonthKey(d));
+  }
+  function pcSaveGoal() {
+    const v = Number(goalInput.replace(/[^\d]/g, ""));
+    if (!isNaN(v) && v >= 0) {
+      setGoalsMap(prev => ({ ...prev, [pcMonth]: v }));
+      localStorage.setItem(`monthlyGoal_${pcMonth}`, String(v));
+    }
+  }
 
   // 工種別棒グラフデータ
   const typeChartData = useMemo(() =>
@@ -110,10 +175,7 @@ export function ProjectListClient() {
   const trendData = useMemo(() => {
     const byMonth: Record<string, number> = {};
     activeProjects.forEach(p => {
-      const key = p.target_month ?? (() => {
-        const d = new Date(p.updated_at ?? p.created_at);
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      })();
+      const key = getProjMonth(p);
       byMonth[key] = (byMonth[key] ?? 0) + (p.profit?.profit ?? 0);
     });
     return Object.entries(byMonth)
@@ -240,9 +302,102 @@ export function ProjectListClient() {
       {/* ── デスクトップ: 2カラム ── */}
       <div className="flex gap-0">
         {/* 左パネル（デスクトップのみ） */}
-        <aside className="hidden lg:block w-64 shrink-0 border-r border-gray-200 bg-white sticky top-[112px] self-start h-[calc(100vh-112px)] overflow-y-auto p-4">
-          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">📊 サマリー</h2>
-          <SummaryPanel />
+        <aside className="hidden lg:flex lg:flex-col w-72 shrink-0 border-r border-gray-200 bg-white sticky top-[112px] self-start h-[calc(100vh-112px)] overflow-y-auto">
+          {/* 月選択ヘッダー */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+            <button onClick={() => pcChangeMonth(-1)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="text-center">
+              <p className="text-sm font-bold text-gray-900">{pcMonthLabel}</p>
+              {pcMonth === nowKey && <p className="text-[9px] text-blue-500 font-semibold">今月</p>}
+            </div>
+            <button onClick={() => pcChangeMonth(1)} disabled={pcMonth === nowKey}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 disabled:opacity-30">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="p-4 space-y-4">
+            {/* 月別KPI */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-blue-50 border border-blue-100 rounded-xl px-2 py-2">
+                <p className="text-[9px] text-blue-400 font-bold uppercase">売上</p>
+                <p className="text-xs font-bold text-blue-700 leading-tight">{fmtM(pcRevenue)}</p>
+                <p className="text-[9px] text-blue-400">{pcMonthProjs.length}件</p>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-2 py-2">
+                <p className="text-[9px] text-emerald-400 font-bold uppercase">利益</p>
+                <p className="text-xs font-bold text-emerald-700 leading-tight">{fmtM(pcProfit)}</p>
+                <p className="text-[9px] text-emerald-400">{pcRate.toFixed(1)}%</p>
+              </div>
+              <div className="bg-violet-50 border border-violet-100 rounded-xl px-2 py-2">
+                <p className="text-[9px] text-violet-400 font-bold uppercase">利益率</p>
+                <p className="text-xs font-bold text-violet-700 leading-tight">{pcRate.toFixed(1)}%</p>
+              </div>
+            </div>
+
+            {/* 目標設定 */}
+            <div className="bg-white border border-gray-200 rounded-xl p-3 space-y-2">
+              <div className="flex items-center gap-1.5">
+                <Target className="h-3.5 w-3.5 text-blue-500" />
+                <p className="text-xs font-semibold text-gray-700">目標利益</p>
+              </div>
+              <div className="flex gap-1.5">
+                <input type="text" inputMode="numeric" value={goalInput}
+                  onChange={e => setGoalInput(e.target.value)}
+                  onBlur={pcSaveGoal} onKeyDown={e => e.key === "Enter" && pcSaveGoal()}
+                  placeholder="例: 500000"
+                  className="flex-1 min-w-0 text-xs border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <button onClick={pcSaveGoal}
+                  className="text-xs bg-blue-600 text-white px-3 py-2 rounded-lg font-semibold shrink-0">
+                  設定
+                </button>
+              </div>
+              {pcGoal > 0 && (
+                <div className="space-y-1">
+                  <div className="flex items-end justify-between">
+                    <span className="text-[10px] text-gray-400">達成率</span>
+                    <span className={`text-base font-black ${pcAchievePct >= 100 ? "text-emerald-600" : pcAchievePct >= 70 ? "text-blue-600" : "text-amber-500"}`}>
+                      {pcAchievePct.toFixed(0)}<span className="text-xs">%</span>
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${pcAchievePct >= 100 ? "bg-emerald-500" : pcAchievePct >= 70 ? "bg-blue-500" : "bg-amber-400"}`}
+                      style={{ width: `${Math.min(pcAchievePct, 100)}%` }} />
+                  </div>
+                  <p className="text-[9px] text-gray-400 text-right">目標 {fmtM(pcGoal)} / 実績 {fmtM(pcProfit)}</p>
+                </div>
+              )}
+            </div>
+
+            {/* 6ヶ月比較グラフ */}
+            <div className="bg-white border border-gray-200 rounded-xl p-3">
+              <p className="text-xs font-semibold text-gray-600 mb-2">直近6ヶ月 利益 vs 目標</p>
+              <ResponsiveContainer width="100%" height={110}>
+                <BarChart data={pc6MData} barCategoryGap="20%" barGap={2}>
+                  <XAxis dataKey="month" tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                  <YAxis hide />
+                  <Tooltip formatter={(v: number) => fmtM(v)}
+                    contentStyle={{ fontSize: 10, border: "1px solid #e5e7eb", borderRadius: 6 }} />
+                  <Legend iconType="circle" iconSize={6} wrapperStyle={{ fontSize: 9, paddingTop: 2 }} />
+                  <Bar dataKey="profit" name="実績" radius={[2, 2, 0, 0]} maxBarSize={16}>
+                    {pc6MData.map((d, i) => <Cell key={i} fill={d.key === pcMonth ? "#10b981" : "#6ee7b7"} />)}
+                  </Bar>
+                  <Bar dataKey="goal" name="目標" radius={[2, 2, 0, 0]} maxBarSize={16}>
+                    {pc6MData.map((d, i) => <Cell key={i} fill={d.key === pcMonth ? "#3b82f6" : "#bfdbfe"} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* 全体KPI */}
+            <div className="border-t border-gray-100 pt-3 space-y-2">
+              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">全案件 累計</p>
+              <SummaryPanel />
+            </div>
+          </div>
         </aside>
 
         {/* 案件リスト */}

@@ -119,7 +119,8 @@ export function SummaryClient() {
 
   const monthRevenue = monthProjects.reduce((s, p) => s + (p.profit?.contract_amount ?? 0), 0);
   const monthProfit  = monthProjects.reduce((s, p) => s + (p.profit?.profit ?? 0), 0);
-  const monthRate    = monthRevenue > 0 ? (monthProfit / monthRevenue) * 100 : 0;
+  const monthCost    = monthProjects.reduce((s, p) => s + (p.profit?.total_cost ?? 0), 0);
+  const monthRate    = monthCost > 0 ? (monthProfit / monthCost) * 100 : 0;
   const selectedGoal = goalsMap[selectedMonth] ?? 0;
   const achieveRate  = selectedGoal > 0 ? Math.min((monthProfit / selectedGoal) * 100, 100) : 0;
   const achievePct   = selectedGoal > 0 ? (monthProfit / selectedGoal) * 100 : 0;
@@ -138,10 +139,9 @@ export function SummaryClient() {
     }),
     [activeProjects, goalsMap]);
 
-  const alertProjects = activeProjects.filter(p => {
-    const r = p.profit!;
-    return r.contract_amount > 0 && (r.profit / r.contract_amount) * 100 < TARGET_RATE;
-  });
+  const alertProjects = activeProjects.filter(p =>
+    p.profit!.contract_amount > 0 && p.profit!.profit_rate < TARGET_RATE
+  );
 
   // 月ラベル
   const [y, m] = selectedMonth.split("-").map(Number);

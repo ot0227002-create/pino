@@ -8,7 +8,8 @@ export function calcProfit(d: ConstructionDetails): ProfitSummary {
 
   const totalCost = subcontractor + material + other;
   const profit = contractAmount - totalCost;
-  const profitRate = contractAmount > 0 ? (profit / contractAmount) * 100 : 0;
+  // 原価ベース利益率: (請負金額 - 原価) ÷ 原価 × 100
+  const profitRate = totalCost > 0 ? (profit / totalCost) * 100 : 0;
 
   return {
     contract_amount: contractAmount,
