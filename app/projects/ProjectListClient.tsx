@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { Plus, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, Search, LogOut } from "lucide-react";
 import { ProjectCard } from "@/components/project/ProjectCard";
 import { StatusFilter } from "@/components/project/StatusFilter";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
@@ -12,10 +13,16 @@ import { calcProfit } from "@/lib/profit";
 import type { ProjectWithDetails, SalesStatus } from "@/types";
 
 export function ProjectListClient() {
+  const router = useRouter();
   const [projects, setProjects] = useState<ProjectWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<SalesStatus | "all">("all");
   const [query, setQuery] = useState("");
+
+  async function handleLogout() {
+    await fetch("/api/auth", { method: "DELETE" });
+    router.push("/login");
+  }
 
   useEffect(() => {
     loadProjects();
@@ -88,13 +95,22 @@ export function ProjectListClient() {
       <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 pt-safe-top">
         <div className="flex items-center justify-between h-14">
           <h1 className="text-lg font-bold text-gray-900">案件一覧</h1>
-          <Link
-            href="/projects/new"
-            className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white"
-          >
-            <Plus className="h-4 w-4" />
-            新規
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleLogout}
+              className="flex items-center justify-center rounded-lg p-2 text-gray-400 active:text-gray-600"
+              aria-label="ログアウト"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
+            <Link
+              href="/projects/new"
+              className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white"
+            >
+              <Plus className="h-4 w-4" />
+              新規
+            </Link>
+          </div>
         </div>
         <div className="pb-3">
           <div className="relative">
