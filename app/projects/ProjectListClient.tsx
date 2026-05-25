@@ -13,9 +13,7 @@ import { ProjectCard } from "@/components/project/ProjectCard";
 import { StatusFilter } from "@/components/project/StatusFilter";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { WelcomeModal } from "@/components/ui/WelcomeModal";
-import { supabase, hasSupabase } from "@/lib/supabase-client";
 import { lsGetProjects } from "@/lib/local-store";
-import { calcProfit } from "@/lib/profit";
 import type { ProjectWithDetails, SalesStatus, WorkType } from "@/types";
 
 const WORK_TYPE_LABEL: Record<WorkType, string> = {
@@ -60,7 +58,22 @@ export function ProjectListClient() {
   useEffect(() => {
     router.refresh();
     loadProjects();
-    // 月別目標をロード
+    loadGoals();
+  }, []);
+
+  async function loadGoals() {
+    // API から月別目標を取得、失敗時は localStorage にフォールバック
+    try {
+      const res = await fetch("/api/settings");
+      if (res.ok) {
+        const s = await res.json();
+        const goalsFromApi: Record<string, number> = s.monthly_goals ?? {};
+        setGoalsMap(goalsFromApi);
+        setGoalInput(goalsFromApi[getMonthKey(new Date())]?.toString() ?? "");
+        return;
+      }
+    } catch { /* fall through */ }
+    // localStorage フォールバック
     const goals: Record<string, number> = {};
     for (let i = 0; i < 12; i++) {
       const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
@@ -70,29 +83,25 @@ export function ProjectListClient() {
     }
     setGoalsMap(goals);
     setGoalInput(goals[getMonthKey(new Date())]?.toString() ?? "");
-  }, []);
+  }
 
   async function loadProjects() {
     setLoading(true);
     try {
-      if (!hasSupabase) { setProjects(lsGetProjects()); return; }
-      const { data: projectData, error } = await supabase
-        .from("projects").select("*").order("updated_at", { ascending: false });
-      if (error) throw error;
-      const ids = projectData.map((p: { id: string }) => p.id);
-      const [{ data: constructions }, { data: images }] = await Promise.all([
-        supabase.from("construction_details").select("*").in("project_id", ids),
-        supabase.from("project_images").select("*").in("project_id", ids),
-      ]);
-      const combined: ProjectWithDetails[] = projectData.map((p: ProjectWithDetails) => {
-        const construction = constructions?.find((c: { project_id: string }) => c.project_id === p.id);
-        const projectImages = images?.filter((i: { project_id: string }) => i.project_id === p.id) ?? [];
-        const profit = construction ? calcProfit(construction) : undefined;
-        return { ...p, construction, images: projectImages, profit };
-      });
-      setProjects(combined);
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+      const res = await fetch("/api/projects");
+      if (res.status === 503) {
+        // Supabase 未設定 → localStorage フォールバック
+        setProjects(lsGetProjects());
+        return;
+      }
+      if (!res.ok) throw new Error("Failed to fetch projects");
+      setProjects(await res.json());
+    } catch (e) {
+      console.error(e);
+      setProjects(lsGetProjects());
+    } finally {
+      setLoading(false);
+    }
   }
 
   const filtered = useMemo(() => projects.filter((p) => {
@@ -152,11 +161,22 @@ export function ProjectListClient() {
     if (getMonthKey(d) > nowKey) return;
     setPcMonth(getMonthKey(d));
   }
-  function pcSaveGoal() {
+  async function pcSaveGoal() {
     const v = Number(goalInput.replace(/[^\d]/g, ""));
     if (!isNaN(v) && v >= 0) {
-      setGoalsMap(prev => ({ ...prev, [pcMonth]: v }));
-      localStorage.setItem(`monthlyGoal_${pcMonth}`, String(v));
+      const newGoals = { ...goalsMap, [pcMonth]: v };
+      setGoalsMap(newGoals);
+      // API に保存、失敗時は localStorage にフォールバック
+      try {
+        const res = await fetch("/api/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ monthly_goals: newGoals }),
+        });
+        if (!res.ok) throw new Error("API save failed");
+      } catch {
+        localStorage.setItem(`monthlyGoal_${pcMonth}`, String(v));
+      }
     }
   }
 

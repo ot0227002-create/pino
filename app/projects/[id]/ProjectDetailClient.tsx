@@ -26,9 +26,7 @@ import { ProfitCard } from "@/components/ui/ProfitCard";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { StatusChangeSheet } from "@/components/project/StatusChangeSheet";
 import { PhotoUpload } from "@/components/project/PhotoUpload";
-import { supabase, hasSupabase } from "@/lib/supabase-client";
 import { lsGetProject, lsUpdateProject, lsDeleteProject } from "@/lib/local-store";
-import { calcProfit } from "@/lib/profit";
 import { formatCurrency } from "@/lib/profit";
 import { cn } from "@/lib/utils";
 import {
@@ -57,35 +55,18 @@ export function ProjectDetailClient({ id }: { id: string }) {
   async function loadProject() {
     setLoading(true);
     try {
-      if (!hasSupabase) {
+      const res = await fetch(`/api/projects/${id}`);
+      if (res.status === 503) {
         setProject(lsGetProject(id) ?? null);
         return;
       }
-
-      const { data: p, error } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", id)
-        .single();
-      if (error) throw error;
-
-      const [{ data: construction }, { data: images }] = await Promise.all([
-        supabase
-          .from("construction_details")
-          .select("*")
-          .eq("project_id", id)
-          .maybeSingle(),
-        supabase
-          .from("project_images")
-          .select("*")
-          .eq("project_id", id)
-          .order("created_at", { ascending: false }),
-      ]);
-
-      const profit = construction ? calcProfit(construction) : undefined;
-      setProject({ ...p, construction: construction ?? undefined, images: images ?? [], profit });
+      if (res.status === 404) { setProject(null); return; }
+      if (!res.ok) throw new Error("Failed to fetch project");
+      const data = await res.json();
+      setProject(data);
     } catch (e) {
       console.error(e);
+      setProject(lsGetProject(id) ?? null);
     } finally {
       setLoading(false);
     }
@@ -93,12 +74,14 @@ export function ProjectDetailClient({ id }: { id: string }) {
 
   async function handleStatusChange(newStatus: SalesStatus) {
     if (!project) return;
-    if (hasSupabase) {
-      await supabase
-        .from("projects")
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq("id", id);
-    } else {
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project: { status: newStatus } }),
+      });
+      if (res.status === 503) lsUpdateProject(id, { status: newStatus });
+    } catch {
       lsUpdateProject(id, { status: newStatus });
     }
     setProject((prev) => prev ? { ...prev, status: newStatus } : prev);
@@ -111,11 +94,9 @@ export function ProjectDetailClient({ id }: { id: string }) {
 
   async function handleDelete() {
     try {
-      if (hasSupabase) {
-        await supabase.from("projects").delete().eq("id", id);
-      } else {
-        lsDeleteProject(id);
-      }
+      const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+      if (res.status === 503) lsDeleteProject(id);
+      else if (!res.ok) throw new Error("Delete failed");
       router.push("/projects");
       router.refresh();
     } catch (e) {
@@ -522,17 +503,40 @@ function AiEmailComposer({ project }: { project: ProjectWithDetails }) {
 
   useEffect(() => {
     if (!open) return;
-    const company  = localStorage.getItem("emailCompanyName") ?? "";
-    const person   = localStorage.getItem("emailPersonName") ?? "";
-    const dept     = localStorage.getItem("emailDepartment") ?? "";
-    const sigParts = [person + (dept ? `（${dept}）` : ""), company].filter(Boolean);
-    setSignature(sigParts.length ? ["---", ...sigParts].join("\n") : "");
-    const keys  = ["inquiry", "estimate", "construction"] as const;
-    const names = ["お問い合わせ後", "現調・見積提出時", "着工・完工時"];
-    setTemplates(
-      keys.map((k, i) => ({ key: k, name: names[i], body: localStorage.getItem(`emailTemplate_${k}`) ?? "" }))
+    async function loadSettings() {
+      let company = "", person = "", dept = "";
+      let tplInquiry = "", tplEstimate = "", tplConstruction = "";
+      try {
+        const res = await fetch("/api/settings");
+        if (res.ok) {
+          const s = await res.json();
+          company       = s.email_company_name ?? "";
+          person        = s.email_person_name ?? "";
+          dept          = s.email_department ?? "";
+          tplInquiry    = s.email_template_inquiry ?? "";
+          tplEstimate   = s.email_template_estimate ?? "";
+          tplConstruction = s.email_template_construction ?? "";
+        } else {
+          throw new Error("API not available");
+        }
+      } catch {
+        company         = localStorage.getItem("emailCompanyName") ?? "";
+        person          = localStorage.getItem("emailPersonName") ?? "";
+        dept            = localStorage.getItem("emailDepartment") ?? "";
+        tplInquiry      = localStorage.getItem("emailTemplate_inquiry") ?? "";
+        tplEstimate     = localStorage.getItem("emailTemplate_estimate") ?? "";
+        tplConstruction = localStorage.getItem("emailTemplate_construction") ?? "";
+      }
+      const sigParts = [person + (dept ? `（${dept}）` : ""), company].filter(Boolean);
+      setSignature(sigParts.length ? ["---", ...sigParts].join("\n") : "");
+      const names = ["お問い合わせ後", "現調・見積提出時", "着工・完工時"];
+      setTemplates(
+        [tplInquiry, tplEstimate, tplConstruction]
+          .map((body, i) => ({ key: ["inquiry", "estimate", "construction"][i], name: names[i], body }))
           .filter(t => t.body)
-    );
+      );
+    }
+    loadSettings();
   }, [open]);
 
   function handleGenerate() {

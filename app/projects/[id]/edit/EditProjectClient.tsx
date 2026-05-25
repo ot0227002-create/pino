@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save, TrendingUp } from "lucide-react";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
-import { supabase, hasSupabase } from "@/lib/supabase-client";
 import { lsGetProject, lsUpdateProject, lsUpsertConstruction } from "@/lib/local-store";
 import { calcProfit, formatCurrency, formatRate } from "@/lib/profit";
 import {
@@ -76,16 +75,11 @@ export function EditProjectClient({ id }: { id: string }) {
     try {
       let data: ProjectWithDetails | null | undefined = null;
 
-      if (!hasSupabase) {
+      const res = await fetch(`/api/projects/${id}`);
+      if (res.status === 503) {
         data = lsGetProject(id);
-      } else {
-        const { data: p } = await supabase.from("projects").select("*").eq("id", id).single();
-        const { data: c } = await supabase
-          .from("construction_details")
-          .select("*")
-          .eq("project_id", id)
-          .maybeSingle();
-        data = p ? { ...p, construction: c ?? undefined } : null;
+      } else if (res.ok) {
+        data = await res.json();
       }
 
       if (!data) return;
@@ -137,49 +131,46 @@ export function EditProjectClient({ id }: { id: string }) {
   async function handleSave() {
     if (!customerName.trim()) return;
     setSaving(true);
+    const constructionPayload = {
+      description: description || null,
+      construction_period: constructionPeriod || null,
+      start_date: startDate || null,
+      planned_end_date: plannedEndDate || null,
+      completion_date: completionDate || null,
+      site_memo: siteMemo || null,
+      is_contracted: isContracted,
+      contract_date: contractDate || null,
+      contract_amount: contractAmount ? parseFloat(contractAmount) : null,
+      subcontractor_cost: subcontractorCost ? parseFloat(subcontractorCost) : null,
+      material_cost: materialCost ? parseFloat(materialCost) : null,
+      other_cost: otherCost ? parseFloat(otherCost) : null,
+    };
+
     try {
-      if (hasSupabase) {
-        await supabase.from("projects").update({
-          customer_name: customerName,
-          phone,
-          address,
-          work_type: workType,
-          status,
-          target_month: targetMonth,
-          last_contact_date: lastContactDate || null,
-          next_action_date: nextActionDate || null,
-          memo: memo || null,
-          updated_at: new Date().toISOString(),
-        }).eq("id", id);
+      const res = await fetch(`/api/projects/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project: {
+            customer_name: customerName,
+            phone,
+            address,
+            work_type: workType,
+            status,
+            target_month: targetMonth,
+            last_contact_date: lastContactDate || null,
+            next_action_date: nextActionDate || null,
+            memo: memo || null,
+          },
+          construction:
+            hasConstruction || description || contractAmount || subcontractorCost || materialCost
+              ? constructionPayload
+              : undefined,
+        }),
+      });
 
-        const constructionPayload = {
-          project_id: id,
-          description: description || null,
-          construction_period: constructionPeriod || null,
-          start_date: startDate || null,
-          planned_end_date: plannedEndDate || null,
-          completion_date: completionDate || null,
-          site_memo: siteMemo || null,
-          is_contracted: isContracted,
-          contract_date: contractDate || null,
-          contract_amount: contractAmount ? parseFloat(contractAmount) : null,
-          subcontractor_cost: subcontractorCost ? parseFloat(subcontractorCost) : null,
-          material_cost: materialCost ? parseFloat(materialCost) : null,
-          other_cost: otherCost ? parseFloat(otherCost) : null,
-          updated_at: new Date().toISOString(),
-        };
-
-        if (hasConstruction) {
-          await supabase.from("construction_details")
-            .upsert(constructionPayload, { onConflict: "project_id" });
-        } else if (
-          description || contractAmount || subcontractorCost || materialCost
-        ) {
-          await supabase.from("construction_details").insert(constructionPayload);
-          setHasConstruction(true);
-        }
-      } else {
-        // ── localStorage モード ──
+      if (res.status === 503) {
+        // localStorage フォールバック
         lsUpdateProject(id, {
           customer_name: customerName,
           phone,
@@ -191,21 +182,9 @@ export function EditProjectClient({ id }: { id: string }) {
           next_action_date: nextActionDate || null,
           memo: memo || null,
         });
-        lsUpsertConstruction({
-          project_id: id,
-          description: description || null,
-          construction_period: constructionPeriod || null,
-          start_date: startDate || null,
-          planned_end_date: plannedEndDate || null,
-          completion_date: completionDate || null,
-          site_memo: siteMemo || null,
-          is_contracted: isContracted,
-          contract_date: contractDate || null,
-          contract_amount: contractAmount ? parseFloat(contractAmount) : null,
-          subcontractor_cost: subcontractorCost ? parseFloat(subcontractorCost) : null,
-          material_cost: materialCost ? parseFloat(materialCost) : null,
-          other_cost: otherCost ? parseFloat(otherCost) : null,
-        });
+        lsUpsertConstruction({ project_id: id, ...constructionPayload });
+      } else if (!res.ok) {
+        throw new Error("Save failed");
       }
 
       router.push(`/projects/${id}`);

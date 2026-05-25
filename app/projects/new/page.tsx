@@ -6,7 +6,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Save } from "lucide-react";
 import Link from "next/link";
-import { supabase, hasSupabase } from "@/lib/supabase-client";
 import { lsCreateProject } from "@/lib/local-store";
 import {
   SALES_STATUS_LABEL,
@@ -51,27 +50,23 @@ export default function NewProjectPage() {
     if (!customerName.trim()) return;
     setSaving(true);
     try {
-      if (hasSupabase) {
-        const now = new Date().toISOString();
-        const { data, error } = await supabase
-          .from("projects")
-          .insert({
-            customer_name: customerName,
-            phone,
-            address,
-            work_type: workType,
-            status,
-            target_month: targetMonth,
-            next_action_date: nextActionDate || null,
-            memo: memo || null,
-            created_at: now,
-            updated_at: now,
-          })
-          .select()
-          .single();
-        if (error) throw error;
-        router.push(`/projects/${data.id}`);
-      } else {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customer_name: customerName,
+          phone,
+          address,
+          work_type: workType,
+          status,
+          target_month: targetMonth,
+          next_action_date: nextActionDate || null,
+          memo: memo || null,
+        }),
+      });
+
+      if (res.status === 503) {
+        // Supabase 未設定 → localStorage フォールバック
         const created = lsCreateProject({
           customer_name: customerName,
           phone,
@@ -86,7 +81,13 @@ export default function NewProjectPage() {
         });
         router.push(`/projects/${created.id}`);
         router.refresh();
+        return;
       }
+
+      if (!res.ok) throw new Error("Failed to create project");
+      const data = await res.json();
+      router.push(`/projects/${data.id}`);
+      router.refresh();
     } catch (e) {
       console.error(e);
       alert("保存に失敗しました");

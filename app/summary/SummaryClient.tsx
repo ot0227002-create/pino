@@ -6,9 +6,7 @@ import { ChevronLeft, ChevronRight, Target } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell,
 } from "recharts";
-import { supabase, hasSupabase } from "@/lib/supabase-client";
 import { lsGetProjects } from "@/lib/local-store";
-import { calcProfit } from "@/lib/profit";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import type { ProjectWithDetails } from "@/types";
 
@@ -51,7 +49,22 @@ export function SummaryClient() {
   useEffect(() => {
     router.refresh(); // Next.js キャッシュを無効化して常に最新を取得
     loadData();
-    // localStorage から全月の目標を読み込み
+    loadGoals();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadGoals() {
+    // API から月別目標を取得、失敗時は localStorage にフォールバック
+    try {
+      const res = await fetch("/api/settings");
+      if (res.ok) {
+        const s = await res.json();
+        const goals: Record<string, number> = s.monthly_goals ?? {};
+        setGoalsMap(goals);
+        setGoalInput(goals[currentMonthKey]?.toString() ?? "");
+        return;
+      }
+    } catch { /* fall through */ }
     const goals: Record<string, number> = {};
     for (let i = 0; i < 12; i++) {
       const d = new Date();
@@ -63,8 +76,7 @@ export function SummaryClient() {
     }
     setGoalsMap(goals);
     setGoalInput(goals[currentMonthKey]?.toString() ?? "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }
 
   useEffect(() => {
     setGoalInput(goalsMap[selectedMonth]?.toString() ?? "");
@@ -73,17 +85,15 @@ export function SummaryClient() {
   async function loadData() {
     setLoading(true);
     try {
-      if (!hasSupabase) { setProjects(lsGetProjects()); return; }
-      const { data: projectData } = await supabase.from("projects").select("*");
-      const ids = (projectData ?? []).map((p: { id: string }) => p.id);
-      const { data: constructions } = await supabase
-        .from("construction_details").select("*").in("project_id", ids);
-      const combined: ProjectWithDetails[] = (projectData ?? []).map((p: ProjectWithDetails) => {
-        const construction = (constructions ?? []).find((c: { project_id: string }) => c.project_id === p.id);
-        const profit = construction ? calcProfit(construction) : undefined;
-        return { ...p, construction, profit };
-      });
-      setProjects(combined);
+      const res = await fetch("/api/projects");
+      if (res.status === 503) {
+        setProjects(lsGetProjects());
+        return;
+      }
+      if (!res.ok) throw new Error("Failed to fetch");
+      setProjects(await res.json());
+    } catch {
+      setProjects(lsGetProjects());
     } finally {
       setLoading(false);
     }
@@ -97,12 +107,22 @@ export function SummaryClient() {
     setSelectedMonth(key);
   }
 
-  function saveGoal() {
+  async function saveGoal() {
     const raw = goalInput.replace(/,/g, "").replace(/万/g, "0000");
     const v = Number(raw);
     if (!isNaN(v) && v >= 0) {
-      setGoalsMap(prev => ({ ...prev, [selectedMonth]: v }));
-      localStorage.setItem(`monthlyGoal_${selectedMonth}`, String(v));
+      const newGoals = { ...goalsMap, [selectedMonth]: v };
+      setGoalsMap(newGoals);
+      try {
+        const res = await fetch("/api/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ monthly_goals: newGoals }),
+        });
+        if (!res.ok) throw new Error("API save failed");
+      } catch {
+        localStorage.setItem(`monthlyGoal_${selectedMonth}`, String(v));
+      }
     }
   }
 

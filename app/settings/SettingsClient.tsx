@@ -134,22 +134,42 @@ export function SettingsClient() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // ログイン時刻
+    // ログイン時刻（デバイスローカル）
     const raw = localStorage.getItem("loginTime");
     if (raw) setLoginTime(Number(raw));
-    // メール設定
-    setEmailCompanyName(localStorage.getItem("emailCompanyName") ?? "");
-    setEmailPersonName(localStorage.getItem("emailPersonName") ?? "");
-    setEmailDepartment(localStorage.getItem("emailDepartment") ?? "");
-    setEmailTemplateInquiry(localStorage.getItem("emailTemplate_inquiry") ?? DEFAULT_EMAIL_TEMPLATES.inquiry);
-    setEmailTemplateEstimate(localStorage.getItem("emailTemplate_estimate") ?? DEFAULT_EMAIL_TEMPLATES.estimate);
-    setEmailTemplateConstruction(localStorage.getItem("emailTemplate_construction") ?? DEFAULT_EMAIL_TEMPLATES.construction);
-    const np  = localStorage.getItem("notifProgress");
-    const nt  = localStorage.getItem("notifTask");
-    const npr = localStorage.getItem("notifProfit");
-    if (np  !== null) setNotifProgress(np  === "true");
-    if (nt  !== null) setNotifTask(nt  === "true");
-    if (npr !== null) setNotifProfit(npr === "true");
+    // メール設定・通知設定をAPIから取得、失敗時はlocalStorageにフォールバック
+    async function loadSettings() {
+      try {
+        const res = await fetch("/api/settings");
+        if (res.ok) {
+          const s = await res.json();
+          setEmailCompanyName(s.email_company_name ?? "");
+          setEmailPersonName(s.email_person_name ?? "");
+          setEmailDepartment(s.email_department ?? "");
+          setEmailTemplateInquiry(s.email_template_inquiry ?? DEFAULT_EMAIL_TEMPLATES.inquiry);
+          setEmailTemplateEstimate(s.email_template_estimate ?? DEFAULT_EMAIL_TEMPLATES.estimate);
+          setEmailTemplateConstruction(s.email_template_construction ?? DEFAULT_EMAIL_TEMPLATES.construction);
+          if (s.notif_progress != null) setNotifProgress(s.notif_progress);
+          if (s.notif_task     != null) setNotifTask(s.notif_task);
+          if (s.notif_profit   != null) setNotifProfit(s.notif_profit);
+          return;
+        }
+      } catch { /* fall through */ }
+      // localStorage フォールバック
+      setEmailCompanyName(localStorage.getItem("emailCompanyName") ?? "");
+      setEmailPersonName(localStorage.getItem("emailPersonName") ?? "");
+      setEmailDepartment(localStorage.getItem("emailDepartment") ?? "");
+      setEmailTemplateInquiry(localStorage.getItem("emailTemplate_inquiry") ?? DEFAULT_EMAIL_TEMPLATES.inquiry);
+      setEmailTemplateEstimate(localStorage.getItem("emailTemplate_estimate") ?? DEFAULT_EMAIL_TEMPLATES.estimate);
+      setEmailTemplateConstruction(localStorage.getItem("emailTemplate_construction") ?? DEFAULT_EMAIL_TEMPLATES.construction);
+      const np  = localStorage.getItem("notifProgress");
+      const nt  = localStorage.getItem("notifTask");
+      const npr = localStorage.getItem("notifProfit");
+      if (np  !== null) setNotifProgress(np  === "true");
+      if (nt  !== null) setNotifTask(nt  === "true");
+      if (npr !== null) setNotifProfit(npr === "true");
+    }
+    loadSettings();
     // Service Worker & 通知
     if (!("serviceWorker" in navigator) || !("Notification" in window)) {
       setSwStatus("unsupported"); return;
@@ -244,21 +264,56 @@ export default function AppleIcon() {
     setNotifPermission(perm);
   }
 
-  function handleEmailSave() {
-    localStorage.setItem("emailCompanyName", emailCompanyName);
-    localStorage.setItem("emailPersonName", emailPersonName);
-    localStorage.setItem("emailDepartment", emailDepartment);
-    localStorage.setItem("emailTemplate_inquiry", emailTemplateInquiry);
-    localStorage.setItem("emailTemplate_estimate", emailTemplateEstimate);
-    localStorage.setItem("emailTemplate_construction", emailTemplateConstruction);
+  async function handleEmailSave() {
+    setIsSaving(true);
+    const payload = {
+      email_company_name:          emailCompanyName,
+      email_person_name:           emailPersonName,
+      email_department:            emailDepartment,
+      email_template_inquiry:      emailTemplateInquiry,
+      email_template_estimate:     emailTemplateEstimate,
+      email_template_construction: emailTemplateConstruction,
+    };
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("API save failed");
+    } catch {
+      // localStorage フォールバック
+      localStorage.setItem("emailCompanyName",        emailCompanyName);
+      localStorage.setItem("emailPersonName",         emailPersonName);
+      localStorage.setItem("emailDepartment",         emailDepartment);
+      localStorage.setItem("emailTemplate_inquiry",   emailTemplateInquiry);
+      localStorage.setItem("emailTemplate_estimate",  emailTemplateEstimate);
+      localStorage.setItem("emailTemplate_construction", emailTemplateConstruction);
+    } finally {
+      setIsSaving(false);
+    }
     setEmailSaved(true);
     setTimeout(() => setEmailSaved(false), 2000);
   }
 
-  function toggleNotif(key: "notifProgress"|"notifTask"|"notifProfit", setter: (v: boolean) => void, current: boolean) {
+  async function toggleNotif(key: "notifProgress"|"notifTask"|"notifProfit", setter: (v: boolean) => void, current: boolean) {
     const v = !current;
     setter(v);
-    localStorage.setItem(key, String(v));
+    const apiKey: Record<string, string> = {
+      notifProgress: "notif_progress",
+      notifTask: "notif_task",
+      notifProfit: "notif_profit",
+    };
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [apiKey[key]]: v }),
+      });
+      if (!res.ok) throw new Error("API save failed");
+    } catch {
+      localStorage.setItem(key, String(v));
+    }
   }
 
   async function sendProgressTest() {
