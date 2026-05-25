@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart2, FolderOpen, PlusCircle, Settings } from "lucide-react";
+import { BarChart2, FolderOpen, PlusCircle, Settings, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/summary",      icon: BarChart2,  label: "サマリー" },
-  { href: "/projects",     icon: FolderOpen, label: "案件" },
-  { href: "/projects/new", icon: PlusCircle, label: "新規",  accent: true },
-  { href: "/settings",     icon: Settings,   label: "設定" },
+  { href: "/summary",      icon: BarChart2,     label: "収益"   },
+  { href: "/projects",     icon: FolderOpen,    label: "案件"   },
+  { href: "/projects/new", icon: PlusCircle,    label: "新規",  accent: true },
+  { href: "/calendar",     icon: CalendarDays,  label: "工程"   },
+  { href: "/settings",     icon: Settings,      label: "設定"   },
 ];
 
 export function BottomNav() {
@@ -34,7 +35,7 @@ export function BottomNav() {
             href === "/projects"
               ? pathname === "/projects" ||
                 (pathname.startsWith("/projects/") && pathname !== "/projects/new")
-              : pathname === href || (href !== "/projects/new" && pathname.startsWith(href));
+              : pathname === href || (href !== "/projects/new" && href !== "/projects" && pathname.startsWith(href));
 
           return (
             <Link
@@ -49,7 +50,6 @@ export function BottomNav() {
                   : "text-gray-400"
               )}
             >
-              {/* アイコンラッパー — 新規ボタンだけ背景あり */}
               {accent ? (
                 <span
                   className={cn(
