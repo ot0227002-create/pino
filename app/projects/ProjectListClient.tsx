@@ -12,7 +12,6 @@ import {
 import { ProjectCard } from "@/components/project/ProjectCard";
 import { StatusFilter } from "@/components/project/StatusFilter";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
-import { WelcomeModal } from "@/components/ui/WelcomeModal";
 import { lsGetProjects } from "@/lib/local-store";
 import type { ProjectWithDetails, SalesStatus, WorkType } from "@/types";
 
@@ -51,7 +50,8 @@ export function ProjectListClient() {
 
   async function handleLogout() {
     await fetch("/api/auth", { method: "DELETE" });
-    localStorage.clear();
+    // セッション情報のみ削除（案件データは保持）
+    localStorage.removeItem("loginTime");
     router.push("/login");
   }
 
@@ -276,7 +276,6 @@ export function ProjectListClient() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <WelcomeModal />
       {/* ── ヘッダー ── */}
       <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 pt-safe-top">
         <div className="flex items-center justify-between h-14">

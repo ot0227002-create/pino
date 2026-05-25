@@ -254,7 +254,8 @@ export default function AppleIcon() {
 
   async function handleLogout() {
     await fetch("/api/auth", { method: "DELETE" });
-    localStorage.clear();
+    // セッション情報のみ削除（案件データ・設定データは保持）
+    localStorage.removeItem("loginTime");
     router.push("/login");
   }
 
