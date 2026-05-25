@@ -51,10 +51,22 @@ export type ProjectUpdate = Partial<ProjectInsert>;
 // Table: construction_details（工事・契約・原価）
 // -----------------------------------------------
 
+// -----------------------------------------------
+// 工事項目（work_items テーブル）
+// -----------------------------------------------
+
+export interface WorkItem {
+  id: string;           // クライアント生成ID（wi_...）またはDB UUID
+  category: string;     // 大枠カテゴリ（例: '外構', 'リフォーム'）
+  name: string;         // 工事名（例: 'カーポート', 'ブロック積み'）
+  detail: string;       // 詳細・サイズ等（例: 'W5400×D5400'）
+  sort_order?: number;  // 表示順
+}
+
 export interface ConstructionDetails {
   id: string;
   project_id: string;             // 案件ID（FK）
-  description: string | null;     // 施工内容
+  description: string | null;     // 施工内容（概要テキスト）
   construction_period: string | null; // 工期（テキスト: "2ヶ月" など）
   start_date: string | null;      // 着工日 (ISO date)
   planned_end_date: string | null; // 完工予定日 (ISO date)
@@ -70,6 +82,9 @@ export interface ConstructionDetails {
   subcontractor_cost: number | null; // 下請支払予定（円）
   material_cost: number | null;      // 材料費（円）
   other_cost: number | null;         // その他経費（円）
+
+  // 工事項目リスト（work_items テーブルから JOIN、またはローカルに内包）
+  work_items?: WorkItem[];
 
   created_at: string;
   updated_at: string;

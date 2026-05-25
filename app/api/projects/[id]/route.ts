@@ -40,7 +40,7 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const [{ data: construction }, { data: images }] = await Promise.all([
+  const [{ data: construction }, { data: images }, { data: workItems }] = await Promise.all([
     dbServer
       .from("construction_details")
       .select("*")
@@ -51,13 +51,20 @@ export async function GET(
       .select("*")
       .eq("project_id", id)
       .order("created_at", { ascending: false }),
+    dbServer
+      .from("work_items")
+      .select("*")
+      .eq("project_id", id)
+      .order("sort_order"),
   ]);
 
   const profit = construction ? calcProfit(construction) : undefined;
 
   return NextResponse.json({
     ...project,
-    construction: construction ?? null,
+    construction: construction
+      ? { ...construction, work_items: workItems ?? [] }
+      : null,
     images: images ?? [],
     profit,
   });
@@ -118,6 +125,30 @@ export async function PATCH(
         });
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+    }
+  }
+
+  // 工事項目を全置き換え（送られてきた場合）
+  if (body.work_items !== undefined) {
+    // 既存を全削除
+    await dbServer.from("work_items").delete().eq("project_id", id);
+    // 新しい項目を挿入
+    const items = body.work_items as Array<{
+      category: string; name: string; detail: string; sort_order?: number;
+    }>;
+    if (items.length > 0) {
+      const { error: wiErr } = await dbServer.from("work_items").insert(
+        items.map((item, index) => ({
+          project_id: id,
+          category: item.category,
+          name: item.name,
+          detail: item.detail ?? "",
+          sort_order: item.sort_order ?? index,
+        }))
+      );
+      if (wiErr) {
+        return NextResponse.json({ error: wiErr.message }, { status: 500 });
       }
     }
   }

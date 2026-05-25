@@ -87,6 +87,33 @@ create table if not exists project_images (
   created_at  timestamptz not null default now()
 );
 
+-- ── 工事項目テーブル ─────────────────────────────────────
+-- 1案件に複数の工事項目を登録（大枠カテゴリ別）
+create table if not exists work_items (
+  id          uuid        primary key default gen_random_uuid(),
+  project_id  uuid        not null references projects(id) on delete cascade,
+  category    text        not null default '',   -- 大枠 e.g., '外構', 'リフォーム'
+  name        text        not null default '',   -- 工事名 e.g., 'カーポート'
+  detail      text        not null default '',   -- 詳細・サイズ e.g., 'W5400×D5400'
+  sort_order  integer     not null default 0,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists idx_work_items_project on work_items(project_id, sort_order);
+
+alter table work_items enable row level security;
+
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='work_items' and policyname='service_role_all') then
+    create policy "service_role_all" on work_items for all to service_role using (true) with check (true);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='work_items' and policyname='anon_all_work_items') then
+    create policy "anon_all_work_items" on work_items for all to anon, authenticated using (true) with check (true);
+  end if;
+end $$;
+
 -- ── アプリ設定テーブル（単一行 id=1） ────────────────────
 create table if not exists app_settings (
   id                          integer     primary key default 1,

@@ -12,6 +12,7 @@ import type {
   Project,
   ConstructionDetails,
   ProjectWithDetails,
+  WorkItem,
 } from "@/types";
 import { calcProfit } from "./profit";
 
@@ -20,6 +21,7 @@ import { PROJECTS as SEED_PROJECTS, CONSTRUCTIONS as SEED_CONSTRUCTIONS } from "
 
 const KEY_PROJECTS = "ls_projects_v2";
 const KEY_CONSTRUCTIONS = "ls_constructions_v2";
+const KEY_WORK_ITEMS = "ls_work_items_v1"; // { [projectId]: WorkItem[] }
 
 // ── Low-level helpers ─────────────────────────────────────────────
 
@@ -61,6 +63,22 @@ function writeConstructions(list: ConstructionDetails[]) {
   }
 }
 
+function readAllWorkItems(): Record<string, WorkItem[]> {
+  try {
+    const raw = localStorage.getItem(KEY_WORK_ITEMS);
+    if (raw) return JSON.parse(raw) as Record<string, WorkItem[]>;
+  } catch { /* ignore */ }
+  return {};
+}
+
+function writeAllWorkItems(map: Record<string, WorkItem[]>) {
+  try {
+    localStorage.setItem(KEY_WORK_ITEMS, JSON.stringify(map));
+  } catch (e) {
+    console.error("[local-store] writeWorkItems failed", e);
+  }
+}
+
 function readLocalPhotos(projectId: string) {
   try {
     return JSON.parse(localStorage.getItem(`lsphotos_${projectId}`) ?? "[]");
@@ -86,8 +104,15 @@ function buildWithDetails(projects: Project[]): ProjectWithDetails[] {
         category: ph.category,
         created_at: ph.createdAt,
       }));
+      const workItemsMap = readAllWorkItems();
+      const work_items: WorkItem[] = workItemsMap[p.id] ?? [];
       const profit = construction ? calcProfit(construction) : undefined;
-      return { ...p, construction, images, profit };
+      return {
+        ...p,
+        construction: construction ? { ...construction, work_items } : undefined,
+        images,
+        profit,
+      };
     });
 }
 
@@ -136,10 +161,13 @@ export function lsUpdateProject(
   writeProjects(projects);
 }
 
-/** 案件を削除（工事情報・写真も連動削除） */
+/** 案件を削除（工事情報・工事項目・写真も連動削除） */
 export function lsDeleteProject(id: string): void {
   writeProjects(readProjects().filter((p) => p.id !== id));
   writeConstructions(readConstructions().filter((c) => c.project_id !== id));
+  const wm = readAllWorkItems();
+  delete wm[id];
+  writeAllWorkItems(wm);
   try { localStorage.removeItem(`lsphotos_${id}`); } catch { /* ignore */ }
 }
 
@@ -184,4 +212,16 @@ export function lsUpsertConstruction(
     });
   }
   writeConstructions(list);
+}
+
+/** 工事項目を保存（全置き換え） */
+export function lsSaveWorkItems(projectId: string, items: WorkItem[]): void {
+  const map = readAllWorkItems();
+  map[projectId] = items.map((item, i) => ({ ...item, sort_order: i }));
+  writeAllWorkItems(map);
+}
+
+/** 工事項目を取得 */
+export function lsGetWorkItems(projectId: string): WorkItem[] {
+  return readAllWorkItems()[projectId] ?? [];
 }

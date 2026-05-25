@@ -35,12 +35,15 @@ export async function GET() {
   }
 
   const ids = (projects ?? []).map((p: { id: string }) => p.id);
-  const [{ data: constructions }, { data: images }] = await Promise.all([
+  const [{ data: constructions }, { data: images }, { data: workItems }] = await Promise.all([
     ids.length
       ? dbServer.from("construction_details").select("*").in("project_id", ids)
       : Promise.resolve({ data: [] }),
     ids.length
       ? dbServer.from("project_images").select("*").in("project_id", ids)
+      : Promise.resolve({ data: [] }),
+    ids.length
+      ? dbServer.from("work_items").select("*").in("project_id", ids).order("sort_order")
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -51,8 +54,16 @@ export async function GET() {
     const projectImages = (images ?? []).filter(
       (i: { project_id: string }) => i.project_id === p.id
     );
+    const projectWorkItems = (workItems ?? []).filter(
+      (w: { project_id: string }) => w.project_id === p.id
+    );
     const profit = construction ? calcProfit(construction) : undefined;
-    return { ...p, construction: construction ?? null, images: projectImages, profit };
+    return {
+      ...p,
+      construction: construction ? { ...construction, work_items: projectWorkItems } : null,
+      images: projectImages,
+      profit,
+    };
   });
 
   return NextResponse.json(result);

@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save, TrendingUp, CheckCircle2, AlertCircle } from "lucide-react";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
-import { lsGetProject, lsUpdateProject, lsUpsertConstruction } from "@/lib/local-store";
+import { WorkItemsEditor } from "@/components/project/WorkItemsEditor";
+import { lsGetProject, lsUpdateProject, lsUpsertConstruction, lsSaveWorkItems, lsGetWorkItems } from "@/lib/local-store";
 import { calcProfit, formatCurrency, formatRate } from "@/lib/profit";
 import {
   SALES_STATUS_LABEL,
@@ -14,6 +15,7 @@ import {
   type SalesStatus,
   type WorkType,
   type ProjectWithDetails,
+  type WorkItem,
 } from "@/types";
 
 const WORK_TYPES: WorkType[] = ["reform", "exterior", "interior"];
@@ -44,7 +46,7 @@ const CHECK_ITEMS: CheckItem[] = [
   { label: "顧客名",   refKey: "customer",     icon: "👤" },
   { label: "電話番号", refKey: "customer",     icon: "📞" },
   { label: "施工場所", refKey: "customer",     icon: "📍" },
-  { label: "施工内容", refKey: "construction", icon: "🔨" },
+  { label: "工事項目", refKey: "construction", icon: "🔨" },
   { label: "着工日",   refKey: "construction", icon: "📅" },
   { label: "完工予定", refKey: "construction", icon: "🏁" },
   { label: "請負金額", refKey: "contract",     icon: "💴" },
@@ -87,6 +89,9 @@ export function EditProjectClient({ id }: { id: string }) {
   const [otherCost, setOtherCost] = useState("");
 
   const [hasConstruction, setHasConstruction] = useState(false);
+
+  // 工事項目
+  const [workItems, setWorkItems] = useState<WorkItem[]>([]);
 
   useEffect(() => {
     loadData();
@@ -131,6 +136,15 @@ export function EditProjectClient({ id }: { id: string }) {
         setSubcontractorCost(c.subcontractor_cost?.toString() ?? "");
         setMaterialCost(c.material_cost?.toString() ?? "");
         setOtherCost(c.other_cost?.toString() ?? "");
+        // 工事項目
+        if (c.work_items && c.work_items.length > 0) {
+          setWorkItems(c.work_items);
+        } else {
+          // ローカルストアから取得（フォールバック用）
+          setWorkItems(lsGetWorkItems(id));
+        }
+      } else {
+        setWorkItems(lsGetWorkItems(id));
       }
     } finally {
       setLoading(false);
@@ -142,12 +156,12 @@ export function EditProjectClient({ id }: { id: string }) {
     "顧客名":   customerName.trim().length > 0,
     "電話番号": phone.trim().length > 0,
     "施工場所": address.trim().length > 0,
-    "施工内容": description.trim().length > 0,
+    "工事項目": workItems.filter(i => i.name.trim()).length > 0,
     "着工日":   startDate.length > 0,
     "完工予定": plannedEndDate.length > 0,
     "請負金額": parseFloat(contractAmount) > 0,
     "下請費用": parseFloat(subcontractorCost) > 0,
-  }), [customerName, phone, address, description, startDate, plannedEndDate, contractAmount, subcontractorCost]);
+  }), [customerName, phone, address, workItems, startDate, plannedEndDate, contractAmount, subcontractorCost]);
 
   const scrollToSection = useCallback((refKey: string) => {
     sectionRefs.current[refKey]?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -200,9 +214,16 @@ export function EditProjectClient({ id }: { id: string }) {
             memo: memo || null,
           },
           construction:
-            hasConstruction || description || contractAmount || subcontractorCost || materialCost
+            hasConstruction || description || contractAmount || subcontractorCost || materialCost || workItems.length > 0
               ? constructionPayload
               : undefined,
+          // 工事項目は常に送信（空配列で全削除も対応）
+          work_items: workItems.map((item, i) => ({
+            category: item.category,
+            name: item.name,
+            detail: item.detail,
+            sort_order: i,
+          })),
         }),
       });
 
@@ -220,6 +241,7 @@ export function EditProjectClient({ id }: { id: string }) {
           memo: memo || null,
         });
         lsUpsertConstruction({ project_id: id, ...constructionPayload });
+        lsSaveWorkItems(id, workItems);
       } else if (!res.ok) {
         throw new Error("Save failed");
       }
@@ -399,10 +421,25 @@ export function EditProjectClient({ id }: { id: string }) {
           </div>
         </div>
 
+        {/* ── 工事項目リスト ── */}
+        <div ref={(el) => { sectionRefs.current["construction"] = el; }} className="scroll-mt-32 space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">工事項目リスト</p>
+            <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${
+              workItems.filter(i => i.name.trim()).length > 0
+                ? "bg-emerald-500 text-white"
+                : "bg-gray-200 text-gray-500"
+            }`}>
+              {workItems.filter(i => i.name.trim()).length}件登録
+            </span>
+          </div>
+          <WorkItemsEditor items={workItems} onChange={setWorkItems} />
+        </div>
+
         {/* ── 施工情報 ── （上位に配置して見落とし防止） */}
         <FormSection
-          title="施工情報"
-          sectionRef={(el) => { sectionRefs.current["construction"] = el; }}
+          title="施工情報（概要）"
+          sectionRef={undefined}
           doneCount={[description, startDate, plannedEndDate, constructionPeriod].filter(v => v.trim().length > 0).length}
           totalCount={4}
         >
