@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save, TrendingUp } from "lucide-react";
+import { ArrowLeft, Save, TrendingUp, CheckCircle2, AlertCircle } from "lucide-react";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { lsGetProject, lsUpdateProject, lsUpsertConstruction } from "@/lib/local-store";
 import { calcProfit, formatCurrency, formatRate } from "@/lib/profit";
@@ -34,10 +34,32 @@ function getMonthOptions() {
   return opts;
 }
 
+// ── チェックリスト定義 ────────────────────────────────
+interface CheckItem {
+  label: string;       // 表示名
+  refKey: string;      // セクションのref key
+  icon: string;        // 絵文字
+}
+const CHECK_ITEMS: CheckItem[] = [
+  { label: "顧客名",   refKey: "customer",     icon: "👤" },
+  { label: "電話番号", refKey: "customer",     icon: "📞" },
+  { label: "施工場所", refKey: "customer",     icon: "📍" },
+  { label: "施工内容", refKey: "construction", icon: "🔨" },
+  { label: "着工日",   refKey: "construction", icon: "📅" },
+  { label: "完工予定", refKey: "construction", icon: "🏁" },
+  { label: "請負金額", refKey: "contract",     icon: "💴" },
+  { label: "下請費用", refKey: "cost",         icon: "🧾" },
+];
+
 export function EditProjectClient({ id }: { id: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showIncompleteModal, setShowIncompleteModal] = useState(false);
+  const [pendingIncomplete, setPendingIncomplete] = useState<string[]>([]);
+
+  // セクションへのスクロール用 ref
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // 案件フォーム
   const [customerName, setCustomerName] = useState("");
@@ -115,6 +137,22 @@ export function EditProjectClient({ id }: { id: string }) {
     }
   }
 
+  // ── リアルタイム入力状態 ─────────────────────────────
+  const checkStatus = useMemo(() => ({
+    "顧客名":   customerName.trim().length > 0,
+    "電話番号": phone.trim().length > 0,
+    "施工場所": address.trim().length > 0,
+    "施工内容": description.trim().length > 0,
+    "着工日":   startDate.length > 0,
+    "完工予定": plannedEndDate.length > 0,
+    "請負金額": parseFloat(contractAmount) > 0,
+    "下請費用": parseFloat(subcontractorCost) > 0,
+  }), [customerName, phone, address, description, startDate, plannedEndDate, contractAmount, subcontractorCost]);
+
+  const scrollToSection = useCallback((refKey: string) => {
+    sectionRefs.current[refKey]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
   const profit = useMemo(() => {
     const amount = parseFloat(contractAmount) || 0;
     const sub = parseFloat(subcontractorCost) || 0;
@@ -128,8 +166,7 @@ export function EditProjectClient({ id }: { id: string }) {
     } as never);
   }, [contractAmount, subcontractorCost, materialCost, otherCost]);
 
-  async function handleSave() {
-    if (!customerName.trim()) return;
+  async function doSave() {
     setSaving(true);
     const constructionPayload = {
       description: description || null,
@@ -197,6 +234,20 @@ export function EditProjectClient({ id }: { id: string }) {
     }
   }
 
+  function handleSave() {
+    if (!customerName.trim()) return;
+    // 未入力の重要項目を検出
+    const missing = CHECK_ITEMS
+      .filter(c => !checkStatus[c.label as keyof typeof checkStatus])
+      .map(c => c.icon + " " + c.label);
+    if (missing.length > 0) {
+      setPendingIncomplete(missing);
+      setShowIncompleteModal(true);
+      return;
+    }
+    doSave();
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -231,9 +282,41 @@ export function EditProjectClient({ id }: { id: string }) {
         </div>
       </header>
 
+      {/* ── 入力チェックリスト（リアルタイム） ── */}
+      <div className="bg-white border-b border-gray-100 px-4 py-2.5">
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">入力チェック — タップでその欄へ</p>
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+          {CHECK_ITEMS.map((item) => {
+            const ok = checkStatus[item.label as keyof typeof checkStatus];
+            return (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => scrollToSection(item.refKey)}
+                className={`flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-semibold shrink-0 transition-colors ${
+                  ok
+                    ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                    : "bg-amber-50 text-amber-600 border border-amber-200"
+                }`}
+              >
+                {ok
+                  ? <CheckCircle2 className="h-3 w-3" />
+                  : <AlertCircle className="h-3 w-3" />}
+                {item.icon} {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="px-4 py-4 pb-44 space-y-5">
         {/* ── 顧客情報 ── */}
-        <FormSection title="顧客情報">
+        <FormSection
+          title="顧客情報"
+          sectionRef={(el) => { sectionRefs.current["customer"] = el; }}
+          doneCount={[customerName, phone, address].filter(v => v.trim().length > 0).length}
+          totalCount={3}
+        >
           <FieldRow label="顧客名 *">
             <input
               type="text"
@@ -316,42 +399,66 @@ export function EditProjectClient({ id }: { id: string }) {
           </div>
         </div>
 
-        {/* ── スケジュール ── */}
-        <FormSection title="スケジュール">
-          <FieldRow label="最終接触日">
+        {/* ── 施工情報 ── （上位に配置して見落とし防止） */}
+        <FormSection
+          title="施工情報"
+          sectionRef={(el) => { sectionRefs.current["construction"] = el; }}
+          doneCount={[description, startDate, plannedEndDate, constructionPeriod].filter(v => v.trim().length > 0).length}
+          totalCount={4}
+        >
+          <FieldRow label="施工内容 ★">
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="キッチン・浴室リフォームなど"
+              className="w-full bg-transparent text-sm text-right text-gray-900 focus:outline-none placeholder:text-gray-300"
+            />
+          </FieldRow>
+          <FieldRow label="工期">
+            <input
+              type="text"
+              value={constructionPeriod}
+              onChange={(e) => setConstructionPeriod(e.target.value)}
+              placeholder="約4週間"
+              className="w-full bg-transparent text-sm text-right text-gray-900 focus:outline-none placeholder:text-gray-300"
+            />
+          </FieldRow>
+          <FieldRow label="着工日 ★">
             <input
               type="date"
-              value={lastContactDate}
-              onChange={(e) => setLastContactDate(e.target.value)}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
               className="bg-transparent text-sm text-right text-gray-900 focus:outline-none"
             />
           </FieldRow>
-          <FieldRow label="次回アクション日">
+          <FieldRow label="完工予定日 ★">
             <input
               type="date"
-              value={nextActionDate}
-              onChange={(e) => setNextActionDate(e.target.value)}
+              value={plannedEndDate}
+              onChange={(e) => setPlannedEndDate(e.target.value)}
               className="bg-transparent text-sm text-right text-gray-900 focus:outline-none"
             />
           </FieldRow>
-        </FormSection>
-
-        {/* ── メモ ── */}
-        <FormSection title="メモ">
-          <TemplatePicker onSelect={(t) => setMemo(v => v ? v + "\n" + t : t)} />
-          <textarea
-            value={memo}
-            onChange={(e) => setMemo(e.target.value)}
-            placeholder="お客様の要望、現場メモなど..."
-            rows={3}
-            className="w-full bg-transparent text-sm text-gray-900 resize-none focus:outline-none placeholder:text-gray-300"
-          />
+          <FieldRow label="完成立会い日">
+            <input
+              type="date"
+              value={completionDate}
+              onChange={(e) => setCompletionDate(e.target.value)}
+              className="bg-transparent text-sm text-right text-gray-900 focus:outline-none"
+            />
+          </FieldRow>
         </FormSection>
 
         {/* ── 契約 ── */}
-        <FormSection title="契約">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-500">請負契約書締結</span>
+        <FormSection
+          title="契約"
+          sectionRef={(el) => { sectionRefs.current["contract"] = el; }}
+          doneCount={[contractDate, contractAmount].filter(v => v.trim().length > 0 && (isNaN(Number(v)) || Number(v) > 0)).length + (isContracted ? 1 : 0)}
+          totalCount={3}
+        >
+          <div className="flex items-center justify-between py-2.5">
+            <span className="text-sm text-gray-500">請負契約書締結 ★</span>
             <button
               type="button"
               onClick={() => setIsContracted((v) => !v)}
@@ -374,7 +481,7 @@ export function EditProjectClient({ id }: { id: string }) {
               className="bg-transparent text-sm text-right text-gray-900 focus:outline-none"
             />
           </FieldRow>
-          <FieldRow label="請負金額（円）">
+          <FieldRow label="請負金額（円）★">
             <input
               type="number"
               value={contractAmount}
@@ -386,8 +493,13 @@ export function EditProjectClient({ id }: { id: string }) {
         </FormSection>
 
         {/* ── 原価 ── */}
-        <FormSection title="原価">
-          <FieldRow label="下請支払予定（円）">
+        <FormSection
+          title="原価"
+          sectionRef={(el) => { sectionRefs.current["cost"] = el; }}
+          doneCount={[subcontractorCost, materialCost, otherCost].filter(v => parseFloat(v) > 0).length}
+          totalCount={3}
+        >
+          <FieldRow label="下請支払予定（円）★">
             <input
               type="number"
               value={subcontractorCost}
@@ -426,9 +538,7 @@ export function EditProjectClient({ id }: { id: string }) {
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
                 <p className="text-xs text-gray-400">請負金額</p>
-                <p className="text-xs font-bold text-gray-900">
-                  {formatCurrency(profit.contract_amount)}
-                </p>
+                <p className="text-xs font-bold text-gray-900">{formatCurrency(profit.contract_amount)}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-400">利益額</p>
@@ -446,50 +556,36 @@ export function EditProjectClient({ id }: { id: string }) {
           </div>
         )}
 
-        {/* ── 施工情報 ── */}
-        <FormSection title="施工情報">
-          <FieldRow label="施工内容">
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="キッチン・浴室リフォームなど"
-              className="w-full bg-transparent text-sm text-right text-gray-900 focus:outline-none placeholder:text-gray-300"
-            />
-          </FieldRow>
-          <FieldRow label="工期">
-            <input
-              type="text"
-              value={constructionPeriod}
-              onChange={(e) => setConstructionPeriod(e.target.value)}
-              placeholder="約4週間"
-              className="w-full bg-transparent text-sm text-right text-gray-900 focus:outline-none placeholder:text-gray-300"
-            />
-          </FieldRow>
-          <FieldRow label="着工日">
+        {/* ── スケジュール ── */}
+        <FormSection title="スケジュール">
+          <FieldRow label="最終接触日">
             <input
               type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              value={lastContactDate}
+              onChange={(e) => setLastContactDate(e.target.value)}
               className="bg-transparent text-sm text-right text-gray-900 focus:outline-none"
             />
           </FieldRow>
-          <FieldRow label="完工予定日">
+          <FieldRow label="次回アクション日">
             <input
               type="date"
-              value={plannedEndDate}
-              onChange={(e) => setPlannedEndDate(e.target.value)}
+              value={nextActionDate}
+              onChange={(e) => setNextActionDate(e.target.value)}
               className="bg-transparent text-sm text-right text-gray-900 focus:outline-none"
             />
           </FieldRow>
-          <FieldRow label="完成立会い日">
-            <input
-              type="date"
-              value={completionDate}
-              onChange={(e) => setCompletionDate(e.target.value)}
-              className="bg-transparent text-sm text-right text-gray-900 focus:outline-none"
-            />
-          </FieldRow>
+        </FormSection>
+
+        {/* ── メモ ── */}
+        <FormSection title="メモ">
+          <TemplatePicker onSelect={(t) => setMemo(v => v ? v + "\n" + t : t)} />
+          <textarea
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+            placeholder="お客様の要望、現場メモなど..."
+            rows={3}
+            className="w-full bg-transparent text-sm text-gray-900 resize-none focus:outline-none placeholder:text-gray-300"
+          />
         </FormSection>
 
         {/* ── 現場メモ ── */}
@@ -513,15 +609,81 @@ export function EditProjectClient({ id }: { id: string }) {
           {saving ? "保存中..." : "保存する"}
         </button>
       </div>
+
+      {/* ── 未入力確認モーダル ── */}
+      {showIncompleteModal && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-end justify-center p-4 pb-8">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-5 shadow-xl">
+            <div className="flex flex-col items-center text-center gap-2">
+              <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center">
+                <AlertCircle className="w-7 h-7 text-amber-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900">未入力の項目があります</h3>
+              <p className="text-sm text-gray-500">以下の項目が未入力です。このまま保存しますか？</p>
+            </div>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {pendingIncomplete.map((item) => (
+                <span key={item} className="text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-3 py-1.5 font-medium">
+                  {item}
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowIncompleteModal(false)}
+                className="flex-1 py-3.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 active:bg-gray-50"
+              >
+                入力に戻る
+              </button>
+              <button
+                onClick={() => { setShowIncompleteModal(false); doSave(); }}
+                className="flex-1 py-3.5 rounded-xl bg-blue-600 text-sm font-bold text-white active:bg-blue-700"
+              >
+                このまま保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+function FormSection({
+  title,
+  children,
+  sectionRef,
+  doneCount,
+  totalCount,
+}: {
+  title: string;
+  children: React.ReactNode;
+  sectionRef?: (el: HTMLDivElement | null) => void;
+  doneCount?: number;
+  totalCount?: number;
+}) {
+  const allDone = doneCount !== undefined && totalCount !== undefined && doneCount >= totalCount;
+  const hasProgress = doneCount !== undefined && totalCount !== undefined;
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{title}</p>
+    <div ref={sectionRef} className="bg-white rounded-2xl border border-gray-200 overflow-hidden scroll-mt-32">
+      <div className={`px-4 py-2.5 border-b flex items-center justify-between ${
+        allDone ? "bg-emerald-50 border-emerald-100" : hasProgress && doneCount! > 0 ? "bg-amber-50 border-amber-100" : "bg-gray-50 border-gray-100"
+      }`}>
+        <p className={`text-xs font-semibold uppercase tracking-wide ${
+          allDone ? "text-emerald-700" : "text-gray-500"
+        }`}>{title}</p>
+        {hasProgress && (
+          <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${
+            allDone
+              ? "bg-emerald-500 text-white"
+              : doneCount! > 0
+              ? "bg-amber-400 text-white"
+              : "bg-gray-200 text-gray-500"
+          }`}>
+            {allDone ? "✓ 完了" : `${doneCount}/${totalCount}`}
+          </span>
+        )}
       </div>
       <div className="px-4 py-3 divide-y divide-gray-100">{children}</div>
     </div>
@@ -529,9 +691,14 @@ function FormSection({ title, children }: { title: string; children: React.React
 }
 
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+  const isKey = label.includes("★");
+  const displayLabel = label.replace(" ★", "");
   return (
     <div className="flex items-center justify-between gap-4 py-2.5">
-      <span className="text-sm text-gray-500 shrink-0">{label}</span>
+      <span className={`text-sm shrink-0 ${isKey ? "font-semibold text-gray-700" : "text-gray-500"}`}>
+        {displayLabel}
+        {isKey && <span className="ml-1 text-[9px] text-amber-500 font-bold align-super">必</span>}
+      </span>
       <div className="flex-1 min-w-0">{children}</div>
     </div>
   );
