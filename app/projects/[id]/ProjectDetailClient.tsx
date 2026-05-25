@@ -140,43 +140,47 @@ export function ProjectDetailClient({ id }: { id: string }) {
   return (
     <>
       <div className="min-h-screen bg-gray-50">
-        {/* ── ヘッダー ── */}
-        <header className="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 pt-safe-top">
-          <div className="flex items-center justify-between h-14">
-            <Link href="/projects" className="flex items-center gap-1 text-blue-600">
+        {/* ── ヘッダー＋タブ（1つのstickyブロック） ── */}
+        <header className="sticky top-0 z-20 bg-white shadow-sm pt-safe-top">
+          {/* 行1: 戻る / タイトル / 編集 */}
+          <div className="flex items-center justify-between px-3 h-11 border-b border-gray-100">
+            <Link
+              href="/projects"
+              className="flex items-center gap-1 text-blue-600 active:opacity-70 transition-opacity min-w-[64px]"
+            >
               <ArrowLeft className="h-5 w-5" />
-              <span className="text-sm">一覧</span>
+              <span className="text-sm font-medium">戻る</span>
             </Link>
-            <div className="flex-1 text-center">
-              <h1 className="text-base font-bold text-gray-900 truncate max-w-[160px] mx-auto">
+            <div className="flex-1 text-center px-2">
+              <h1 className="text-sm font-bold text-gray-900 truncate leading-tight">
                 {project.customer_name}
               </h1>
               <p className="text-[10px] text-gray-400 leading-tight">
-                {WORK_TYPE_LABEL[project.work_type]} · <span className="font-semibold">{SALES_STATUS_LABEL[project.status]}</span>
+                {WORK_TYPE_LABEL[project.work_type]}
+                <span className="mx-1">·</span>
+                <span className="font-semibold text-gray-500">{SALES_STATUS_LABEL[project.status]}</span>
               </p>
             </div>
             <Link
               href={`/projects/${id}/edit`}
-              className="flex items-center gap-1 text-gray-500"
+              className="flex items-center gap-1 text-blue-600 active:opacity-70 transition-opacity min-w-[48px] justify-end"
             >
               <Edit3 className="h-4 w-4" />
-              <span className="text-sm">編集</span>
+              <span className="text-sm font-medium">編集</span>
             </Link>
           </div>
-        </header>
 
-        {/* ── タブ（ヘッダー直下に移動） ── */}
-        <div className="sticky top-14 z-10 bg-white border-b border-gray-200 shadow-sm">
-          <div className="flex">
+          {/* 行2: タブ */}
+          <div className="flex border-b border-gray-200">
             {tabs.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setActiveTab(t.key)}
                 className={cn(
-                  "flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-medium transition-colors",
+                  "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-colors",
                   activeTab === t.key
-                    ? "text-blue-600 border-b-2 border-blue-600"
-                    : "text-gray-400"
+                    ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50/40"
+                    : "text-gray-400 active:bg-gray-50"
                 )}
               >
                 {t.icon}
@@ -184,7 +188,7 @@ export function ProjectDetailClient({ id }: { id: string }) {
               </button>
             ))}
           </div>
-        </div>
+        </header>
 
         {/* ── サマリーカード（スクロールエリア） ── */}
         <div className="bg-white border-b border-gray-200 px-4 py-3">
