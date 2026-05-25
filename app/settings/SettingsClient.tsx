@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Save, Building2, Bell, Shield, Image as ImageIcon, Copy, Check,
-  Eye, EyeOff, LogOut, Clock, BookOpen, Mail,
+  Eye, EyeOff, LogOut, Clock, BookOpen, Mail, Fingerprint,
 } from "lucide-react";
 
 // ── ガイドセクションコンポーネント ──────────────────────
@@ -105,6 +105,10 @@ export function SettingsClient() {
 
   // セキュリティタブ
   const [loginTime, setLoginTime] = useState<number | null>(null);
+  // 生体認証
+  const [biometricRegistered, setBiometricRegistered] = useState(false);
+  const [biometricSupported, setBiometricSupported] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
@@ -137,6 +141,9 @@ export function SettingsClient() {
     // ログイン時刻（デバイスローカル）
     const raw = localStorage.getItem("loginTime");
     if (raw) setLoginTime(Number(raw));
+    // 生体認証
+    setBiometricRegistered(localStorage.getItem("wa_enabled") === "true");
+    setBiometricSupported(typeof PublicKeyCredential !== "undefined");
     // メール設定・通知設定をAPIから取得、失敗時はlocalStorageにフォールバック
     async function loadSettings() {
       try {
@@ -250,6 +257,70 @@ export default function AppleIcon() {
     setPwChanging(false);
     setCurrentPw(""); setNewPw(""); setConfirmPw("");
     alert("パスワードを変更しました。\n\nCloudflare Pages の環境変数 APP_PASSWORD も同じ値に更新してください。");
+  }
+
+  async function handleBiometricRegister() {
+    setBiometricLoading(true);
+    try {
+      const res = await fetch("/api/webauthn/challenge");
+      const { challenge } = await res.json() as { challenge: string };
+
+      function b64toBuffer(b: string): ArrayBuffer {
+        const base64 = b.replace(/-/g, "+").replace(/_/g, "/");
+        const bin = atob(base64.padEnd(base64.length + ((4 - (b.length % 4)) % 4), "="));
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        return arr.buffer;
+      }
+      function bufToB64(buf: ArrayBuffer): string {
+        const arr = new Uint8Array(buf);
+        let bin = "";
+        for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+        return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+      }
+
+      const cred = await navigator.credentials.create({
+        publicKey: {
+          challenge: b64toBuffer(challenge),
+          rp: { name: "こばかいアプリ", id: location.hostname },
+          user: { id: new TextEncoder().encode("kobakaiuser"), name: "owner", displayName: "こばかいオーナー" },
+          pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+          authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+          timeout: 60000,
+          attestation: "none",
+        },
+      }) as PublicKeyCredential | null;
+
+      if (!cred) throw new Error("キャンセルされました");
+      const resp = cred.response as AuthenticatorAttestationResponse;
+
+      const r = await fetch("/api/webauthn/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: cred.id,
+          rawId: bufToB64(cred.rawId),
+          type: cred.type,
+          response: { clientDataJSON: bufToB64(resp.clientDataJSON), attestationObject: bufToB64(resp.attestationObject) },
+        }),
+      });
+      if (!r.ok) { const d = await r.json() as { error?: string }; throw new Error(d.error ?? "登録失敗"); }
+      const d = await r.json() as { credentialId: string };
+      localStorage.setItem("wa_credential_id", d.credentialId);
+      localStorage.setItem("wa_enabled", "true");
+      setBiometricRegistered(true);
+      alert("生体認証を登録しました。次回からFace ID / 指紋でログインできます。");
+    } catch (err) {
+      alert(`登録に失敗しました: ${String(err)}`);
+    } finally {
+      setBiometricLoading(false);
+    }
+  }
+
+  function handleBiometricRemove() {
+    localStorage.removeItem("wa_credential_id");
+    localStorage.removeItem("wa_enabled");
+    setBiometricRegistered(false);
   }
 
   async function handleLogout() {
@@ -743,6 +814,49 @@ export default function AppleIcon() {
                     </div>
                   </div>
                   <p className="text-[10px] text-blue-400">ログインから24時間後に自動でセッションが失効します</p>
+                </div>
+
+                {/* 生体認証 */}
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                    <Fingerprint className="w-4 h-4 text-gray-400" />
+                    Face ID / 指紋ログイン
+                  </p>
+                  {!biometricSupported ? (
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-400">
+                      このデバイスは生体認証に対応していません
+                    </div>
+                  ) : biometricRegistered ? (
+                    <div className="space-y-3">
+                      <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 flex items-center gap-3">
+                        <Fingerprint className="w-5 h-5 text-emerald-500 shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-emerald-800">登録済み ✅</p>
+                          <p className="text-xs text-emerald-600 mt-0.5">Face ID / 指紋でログインできます</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleBiometricRemove}
+                        className="w-full py-2.5 rounded-xl border border-red-200 text-red-500 text-sm font-semibold active:bg-red-50 transition-colors"
+                      >
+                        生体認証を解除する
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleBiometricRegister}
+                      disabled={biometricLoading}
+                      className="w-full py-3 rounded-xl bg-emerald-600 text-white text-sm font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {biometricLoading ? (
+                        <><span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />登録中...</>
+                      ) : (
+                        <><Fingerprint className="w-4 h-4" />Face ID / 指紋を登録する</>
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 {/* パスワード変更 */}

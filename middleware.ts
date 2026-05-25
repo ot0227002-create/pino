@@ -8,6 +8,7 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/login") ||
+    pathname.startsWith("/api/webauthn") ||
     pathname.startsWith("/_next") ||
     pathname.includes(".")
   ) {

@@ -1,63 +1,82 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { BarChart2, FolderOpen, PlusCircle, Settings, ArrowLeft, ArrowRight } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { BarChart2, FolderOpen, PlusCircle, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/summary",      icon: BarChart2,  label: "サマリー" },
   { href: "/projects",     icon: FolderOpen, label: "案件" },
-  { href: "/projects/new", icon: PlusCircle, label: "新規" },
+  { href: "/projects/new", icon: PlusCircle, label: "新規",  accent: true },
   { href: "/settings",     icon: Settings,   label: "設定" },
 ];
 
 export function BottomNav() {
   const pathname = usePathname();
-  const router = useRouter();
 
   if (pathname === "/login") return null;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100">
-      {/* 戻る・進む */}
-      <div className="flex items-center h-8 border-b border-gray-100 px-3 gap-0.5">
-        <button
-          onClick={() => router.back()}
-          aria-label="戻る"
-          className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 active:bg-gray-100 active:text-gray-700 transition-colors">
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <button
-          onClick={() => window.history.forward()}
-          aria-label="進む"
-          className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 active:bg-gray-100 active:text-gray-700 transition-colors">
-          <ArrowRight className="h-4 w-4" />
-        </button>
-        <div className="flex-1" />
-        <span className="text-[9px] text-gray-300 pr-1">こばかいアプリ</span>
-      </div>
-
-      {/* タブバー — pb-safe-bottom でホームバーの上に逃がす */}
-      <div className="flex pb-safe-bottom">
-        {NAV.map(({ href, icon: Icon, label }) => {
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50 bg-white"
+      style={{
+        borderTop: "1px solid rgba(0,0,0,0.07)",
+        boxShadow: "0 -1px 0 rgba(0,0,0,0.04), 0 -4px 16px rgba(0,0,0,0.05)",
+      }}
+    >
+      <div
+        className="flex items-stretch"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      >
+        {NAV.map(({ href, icon: Icon, label, accent }) => {
           const active =
             href === "/projects"
-              ? pathname === "/projects" || (pathname.startsWith("/projects/") && pathname !== "/projects/new")
-              : pathname.startsWith(href);
+              ? pathname === "/projects" ||
+                (pathname.startsWith("/projects/") && pathname !== "/projects/new")
+              : pathname === href || (href !== "/projects/new" && pathname.startsWith(href));
+
           return (
             <Link
               key={href}
               href={href}
               className={cn(
-                "flex flex-1 flex-col items-center gap-0.5 pt-2.5 pb-2.5 text-[10px] font-medium transition-colors select-none",
-                active ? "text-blue-600" : "text-gray-400"
+                "flex flex-1 flex-col items-center justify-center gap-1 py-3 select-none transition-colors duration-100",
+                active
+                  ? "text-blue-600"
+                  : accent
+                  ? "text-blue-500"
+                  : "text-gray-400"
               )}
             >
-              <Icon
-                className={cn("h-6 w-6", active ? "stroke-[2.2]" : "stroke-[1.7]")}
-              />
-              {label}
+              {/* アイコンラッパー — 新規ボタンだけ背景あり */}
+              {accent ? (
+                <span
+                  className={cn(
+                    "flex items-center justify-center rounded-xl transition-all",
+                    active
+                      ? "bg-blue-600 text-white w-10 h-10"
+                      : "bg-blue-50 text-blue-500 w-10 h-10"
+                  )}
+                >
+                  <Icon className="h-[22px] w-[22px] stroke-[1.8]" />
+                </span>
+              ) : (
+                <Icon
+                  className={cn(
+                    "h-[26px] w-[26px] transition-all",
+                    active ? "stroke-[2.2]" : "stroke-[1.6]"
+                  )}
+                />
+              )}
+              <span
+                className={cn(
+                  "text-[11px] font-semibold leading-none",
+                  active ? "text-blue-600" : accent ? "text-blue-500" : "text-gray-400"
+                )}
+              >
+                {label}
+              </span>
             </Link>
           );
         })}
