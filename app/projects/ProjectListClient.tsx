@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, LogOut, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Target } from "lucide-react";
+import { Plus, Search, LogOut, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Target, RefreshCw } from "lucide-react";
 import {
   AreaChart, Area,
   BarChart, Bar,
@@ -47,6 +47,14 @@ export function ProjectListClient() {
   const [pcMonth, setPcMonth] = useState(() => getMonthKey(new Date()));
   const [goalsMap, setGoalsMap] = useState<Record<string, number>>({});
   const [goalInput, setGoalInput] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    router.refresh();
+    await Promise.all([loadProjects(), loadGoals()]);
+    setRefreshing(false);
+  }
 
   async function handleLogout() {
     await fetch("/api/auth", { method: "DELETE" });
@@ -56,7 +64,6 @@ export function ProjectListClient() {
   }
 
   useEffect(() => {
-    router.refresh();
     loadProjects();
     loadGoals();
   }, []);
@@ -281,6 +288,11 @@ export function ProjectListClient() {
         <div className="flex items-center justify-between h-14">
           <h1 className="text-lg font-bold text-gray-900">案件一覧</h1>
           <div className="flex items-center gap-2">
+            <button onClick={handleRefresh} disabled={refreshing}
+              className="flex items-center justify-center rounded-lg p-2 text-gray-400 active:text-gray-600 disabled:opacity-50"
+              aria-label="更新">
+              <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
+            </button>
             <button onClick={handleLogout}
               className="flex items-center justify-center rounded-lg p-2 text-gray-400 active:text-gray-600"
               aria-label="ログアウト">

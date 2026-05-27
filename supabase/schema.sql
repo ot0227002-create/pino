@@ -6,13 +6,21 @@
 create extension if not exists "uuid-ossp";
 
 -- ── 案件テーブル ─────────────────────────────────────────
-create type if not exists sales_status as enum (
-  'new_inquiry', 'survey_scheduled', 'survey_done',
-  'estimating', 'estimate_sent', 'considering',
-  'contracted', 'in_progress', 'completed'
-);
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'sales_status') then
+    create type sales_status as enum (
+      'new_inquiry', 'survey_scheduled', 'survey_done',
+      'estimating', 'estimate_sent', 'considering',
+      'contracted', 'in_progress', 'completed'
+    );
+  end if;
+end $$;
 
-create type if not exists work_type as enum ('reform', 'exterior', 'interior');
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'work_type') then
+    create type work_type as enum ('reform', 'exterior', 'interior');
+  end if;
+end $$;
 
 create table if not exists projects (
   id                uuid        primary key default uuid_generate_v4(),
@@ -34,6 +42,7 @@ create or replace function update_updated_at()
 returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end; $$;
 
+drop trigger if exists projects_updated_at on projects;
 create trigger projects_updated_at
   before update on projects
   for each row execute procedure update_updated_at();
@@ -56,20 +65,13 @@ create table if not exists construction_details (
   subcontractor_cost  numeric(12,0),
   material_cost       numeric(12,0),
   other_cost          numeric(12,0),
-  -- 自動計算列
-  total_cost generated always as (
-    coalesce(subcontractor_cost,0) + coalesce(material_cost,0) + coalesce(other_cost,0)
-  ) stored,
-  profit generated always as (
-    coalesce(contract_amount,0) - (
-      coalesce(subcontractor_cost,0) + coalesce(material_cost,0) + coalesce(other_cost,0)
-    )
-  ) stored,
+  -- total_cost / profit はアプリ側で計算（生成列は使用しない）
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now(),
   unique (project_id)
 );
 
+drop trigger if exists construction_details_updated_at on construction_details;
 create trigger construction_details_updated_at
   before update on construction_details
   for each row execute procedure update_updated_at();
@@ -77,7 +79,11 @@ create trigger construction_details_updated_at
 -- ------------------------------------------------
 -- project_images（写真）
 -- ------------------------------------------------
-create type if not exists image_category as enum ('before', 'after', 'in_progress', 'other');
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'image_category') then
+    create type image_category as enum ('before', 'after', 'in_progress', 'other');
+  end if;
+end $$;
 
 create table if not exists project_images (
   id          uuid primary key default uuid_generate_v4(),
@@ -131,7 +137,8 @@ create table if not exists app_settings (
   check (id = 1)
 );
 
-create trigger if not exists app_settings_updated_at
+drop trigger if exists app_settings_updated_at on app_settings;
+create trigger app_settings_updated_at
   before update on app_settings
   for each row execute procedure update_updated_at();
 

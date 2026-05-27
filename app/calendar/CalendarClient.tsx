@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, CalendarDays, X, ArrowRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, X, ArrowRight, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { lsGetProjects } from "@/lib/local-store";
 import type { ProjectWithDetails, WorkType, SalesStatus } from "@/types";
@@ -104,20 +104,29 @@ export function CalendarClient() {
   const [projects, setProjects] = useState<ProjectWithDetails[]>([]);
   const [loading, setLoading]   = useState(true);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // データ取得
+  async function loadProjects() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/projects");
+      setProjects(res.ok ? (await res.json() as ProjectWithDetails[]) : lsGetProjects());
+    } catch {
+      setProjects(lsGetProjects());
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await loadProjects();
+    setRefreshing(false);
+  }
+
+  // 初回データ取得
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await fetch("/api/projects");
-        setProjects(res.ok ? (await res.json() as ProjectWithDetails[]) : lsGetProjects());
-      } catch {
-        setProjects(lsGetProjects());
-      } finally {
-        setLoading(false);
-      }
-    })();
+    loadProjects();
   }, []);
 
   // 月移動（選択日はリセット）
@@ -204,9 +213,16 @@ export function CalendarClient() {
               <span className="text-[10px] text-blue-500 font-semibold -mt-0.5">今月に戻る</span>
             )}
           </button>
-          <button onClick={nextMonth} className="flex items-center justify-center w-9 h-9 rounded-xl active:bg-gray-100 transition-colors">
-            <ChevronRight className="h-5 w-5 text-gray-500" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button onClick={handleRefresh} disabled={refreshing}
+              className="flex items-center justify-center w-9 h-9 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-50"
+              aria-label="更新">
+              <RefreshCw className={`h-4 w-4 text-gray-500 ${refreshing ? "animate-spin" : ""}`} />
+            </button>
+            <button onClick={nextMonth} className="flex items-center justify-center w-9 h-9 rounded-xl active:bg-gray-100 transition-colors">
+              <ChevronRight className="h-5 w-5 text-gray-500" />
+            </button>
+          </div>
         </div>
       </header>
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Target } from "lucide-react";
+import { ChevronLeft, ChevronRight, Target, RefreshCw } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell,
 } from "recharts";
@@ -45,13 +45,20 @@ export function SummaryClient() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
   const [goalsMap, setGoalsMap] = useState<Record<string, number>>({});
   const [goalInput, setGoalInput] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    router.refresh(); // Next.js キャッシュを無効化して常に最新を取得
     loadData();
     loadGoals();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    router.refresh();
+    await Promise.all([loadData(), loadGoals()]);
+    setRefreshing(false);
+  }
 
   async function loadGoals() {
     // API から月別目標を取得、失敗時は localStorage にフォールバック
@@ -170,8 +177,13 @@ export function SummaryClient() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-40">
-      <header className="bg-white border-b border-gray-200 px-4 h-14 flex items-center">
+      <header className="bg-white border-b border-gray-200 px-4 h-14 flex items-center justify-between">
         <h1 className="text-lg font-bold text-gray-900">サマリー</h1>
+        <button onClick={handleRefresh} disabled={refreshing}
+          className="flex items-center justify-center rounded-lg p-2 text-gray-400 active:text-gray-600 disabled:opacity-50"
+          aria-label="更新">
+          <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
+        </button>
       </header>
 
       {loading ? <LoadingSpinner /> : (
