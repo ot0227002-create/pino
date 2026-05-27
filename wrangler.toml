@@ -1,4 +1,19 @@
-name = "anken-kanri"
+# こばかいアプリ — Cloudflare Pages 設定
+# GitHub 連携デプロイ時はこのファイルを自動的に参照します
+name = "pino"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = ".vercel/output/static"
+
+# ────────────────────────────────────────────────────────────
+# 環境変数はここに直書きせず、Cloudflare Pages ダッシュボードの
+# Settings → Environment variables で設定してください。
+# （シークレットは必ず "Encrypt" にチェックを入れる）
+#
+# 必要な変数:
+#   APP_PASSWORD               ← ログインパスワード
+#   APP_SESSION_SECRET         ← セッション署名用ランダム文字列 (Encrypt)
+#   NEXT_PUBLIC_SUPABASE_URL   ← https://xxxxx.supabase.co
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY  ← Supabase anon/public キー
+#   SUPABASE_SERVICE_ROLE_KEY  ← Supabase service_role キー (Encrypt)
+# ────────────────────────────────────────────────────────────
