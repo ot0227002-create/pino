@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Save, Building2, Bell, Shield, Image as ImageIcon, Copy, Check,
-  Eye, EyeOff, LogOut, Clock, BookOpen, Mail, Fingerprint,
+  Eye, EyeOff, LogOut, Clock, BookOpen, Mail, Fingerprint, RefreshCw,
 } from "lucide-react";
 
 // ── ガイドセクションコンポーネント ──────────────────────
@@ -135,6 +135,45 @@ export function SettingsClient() {
   const [notifProfit, setNotifProfit] = useState(true);
   const [testProgressCountdown, setTestProgressCountdown] = useState<number | null>(null);
   const [testTaskCountdown, setTestTaskCountdown] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function loadSettings() {
+    try {
+      const res = await fetch("/api/settings");
+      if (res.ok) {
+        const s = await res.json();
+        setEmailCompanyName(s.email_company_name ?? "");
+        setEmailPersonName(s.email_person_name ?? "");
+        setEmailDepartment(s.email_department ?? "");
+        setEmailTemplateInquiry(s.email_template_inquiry ?? DEFAULT_EMAIL_TEMPLATES.inquiry);
+        setEmailTemplateEstimate(s.email_template_estimate ?? DEFAULT_EMAIL_TEMPLATES.estimate);
+        setEmailTemplateConstruction(s.email_template_construction ?? DEFAULT_EMAIL_TEMPLATES.construction);
+        if (s.notif_progress != null) setNotifProgress(s.notif_progress);
+        if (s.notif_task     != null) setNotifTask(s.notif_task);
+        if (s.notif_profit   != null) setNotifProfit(s.notif_profit);
+        return;
+      }
+    } catch { /* fall through */ }
+    // localStorage フォールバック
+    setEmailCompanyName(localStorage.getItem("emailCompanyName") ?? "");
+    setEmailPersonName(localStorage.getItem("emailPersonName") ?? "");
+    setEmailDepartment(localStorage.getItem("emailDepartment") ?? "");
+    setEmailTemplateInquiry(localStorage.getItem("emailTemplate_inquiry") ?? DEFAULT_EMAIL_TEMPLATES.inquiry);
+    setEmailTemplateEstimate(localStorage.getItem("emailTemplate_estimate") ?? DEFAULT_EMAIL_TEMPLATES.estimate);
+    setEmailTemplateConstruction(localStorage.getItem("emailTemplate_construction") ?? DEFAULT_EMAIL_TEMPLATES.construction);
+    const np  = localStorage.getItem("notifProgress");
+    const nt  = localStorage.getItem("notifTask");
+    const npr = localStorage.getItem("notifProfit");
+    if (np  !== null) setNotifProgress(np  === "true");
+    if (nt  !== null) setNotifTask(nt  === "true");
+    if (npr !== null) setNotifProfit(npr === "true");
+  }
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await loadSettings();
+    setRefreshing(false);
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -144,38 +183,6 @@ export function SettingsClient() {
     // 生体認証
     setBiometricRegistered(localStorage.getItem("wa_enabled") === "true");
     setBiometricSupported(typeof PublicKeyCredential !== "undefined");
-    // メール設定・通知設定をAPIから取得、失敗時はlocalStorageにフォールバック
-    async function loadSettings() {
-      try {
-        const res = await fetch("/api/settings");
-        if (res.ok) {
-          const s = await res.json();
-          setEmailCompanyName(s.email_company_name ?? "");
-          setEmailPersonName(s.email_person_name ?? "");
-          setEmailDepartment(s.email_department ?? "");
-          setEmailTemplateInquiry(s.email_template_inquiry ?? DEFAULT_EMAIL_TEMPLATES.inquiry);
-          setEmailTemplateEstimate(s.email_template_estimate ?? DEFAULT_EMAIL_TEMPLATES.estimate);
-          setEmailTemplateConstruction(s.email_template_construction ?? DEFAULT_EMAIL_TEMPLATES.construction);
-          if (s.notif_progress != null) setNotifProgress(s.notif_progress);
-          if (s.notif_task     != null) setNotifTask(s.notif_task);
-          if (s.notif_profit   != null) setNotifProfit(s.notif_profit);
-          return;
-        }
-      } catch { /* fall through */ }
-      // localStorage フォールバック
-      setEmailCompanyName(localStorage.getItem("emailCompanyName") ?? "");
-      setEmailPersonName(localStorage.getItem("emailPersonName") ?? "");
-      setEmailDepartment(localStorage.getItem("emailDepartment") ?? "");
-      setEmailTemplateInquiry(localStorage.getItem("emailTemplate_inquiry") ?? DEFAULT_EMAIL_TEMPLATES.inquiry);
-      setEmailTemplateEstimate(localStorage.getItem("emailTemplate_estimate") ?? DEFAULT_EMAIL_TEMPLATES.estimate);
-      setEmailTemplateConstruction(localStorage.getItem("emailTemplate_construction") ?? DEFAULT_EMAIL_TEMPLATES.construction);
-      const np  = localStorage.getItem("notifProgress");
-      const nt  = localStorage.getItem("notifTask");
-      const npr = localStorage.getItem("notifProfit");
-      if (np  !== null) setNotifProgress(np  === "true");
-      if (nt  !== null) setNotifTask(nt  === "true");
-      if (npr !== null) setNotifProfit(npr === "true");
-    }
     loadSettings();
     // Service Worker & 通知
     if (!("serviceWorker" in navigator) || !("Notification" in window)) {
@@ -437,12 +444,19 @@ export default function AppleIcon() {
             </button>
             <h1 className="text-lg font-bold text-gray-900">システム設定</h1>
           </div>
-          {activeTab !== "favicon" && activeTab !== "guide" && activeTab !== "email" && (
-            <button onClick={() => setIsSaving(true)} disabled={isSaving}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-50">
-              {isSaving ? "保存中..." : <><Save className="w-4 h-4" />保存</>}
+          <div className="flex items-center gap-2">
+            <button onClick={handleRefresh} disabled={refreshing}
+              className="flex items-center justify-center p-2 text-gray-400 hover:bg-gray-100 rounded-xl transition-colors disabled:opacity-50"
+              aria-label="更新">
+              <RefreshCw className={`w-5 h-5 ${refreshing ? "animate-spin" : ""}`} />
             </button>
-          )}
+            {activeTab !== "favicon" && activeTab !== "guide" && activeTab !== "email" && (
+              <button onClick={() => setIsSaving(true)} disabled={isSaving}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-50">
+                {isSaving ? "保存中..." : <><Save className="w-4 h-4" />保存</>}
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
