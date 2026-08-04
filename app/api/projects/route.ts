@@ -5,13 +5,13 @@ import { dbServer, hasSupabaseServer } from "@/lib/db-server";
 import type { ConstructionDetails } from "@/types";
 
 function calcProfit(c: Partial<ConstructionDetails>) {
-  const contract_amount = c.contract_amount ?? 0;
+  const contract_amount = Math.round((c.contract_amount ?? 0) / 1.1); // 税抜に変換
   const total_cost =
     (c.subcontractor_cost ?? 0) + (c.material_cost ?? 0) + (c.other_cost ?? 0);
   const profit = contract_amount - total_cost;
   const profit_rate =
-    total_cost > 0
-      ? Math.round(((profit / total_cost) * 100) * 10) / 10
+    contract_amount > 0
+      ? Math.round(((profit / contract_amount) * 100) * 10) / 10
       : 0;
   return { contract_amount, total_cost, profit, profit_rate };
 }

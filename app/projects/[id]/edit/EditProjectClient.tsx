@@ -518,7 +518,7 @@ export function EditProjectClient({ id }: { id: string }) {
               className="bg-transparent text-sm text-right text-gray-900 focus:outline-none"
             />
           </FieldRow>
-          <FieldRow label="請負金額（円）★">
+          <FieldRow label="請負金額（税込・円）★">
             <input
               type="number"
               value={contractAmount}
@@ -574,7 +574,7 @@ export function EditProjectClient({ id }: { id: string }) {
             </div>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
-                <p className="text-xs text-gray-400">請負金額</p>
+                <p className="text-xs text-gray-400">税抜売上</p>
                 <p className="text-xs font-bold text-gray-900">{formatCurrency(profit.contract_amount)}</p>
               </div>
               <div>

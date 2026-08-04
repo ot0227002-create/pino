@@ -293,8 +293,8 @@ export function ProjectDetailClient({ id }: { id: string }) {
                     />
                     <Row label="契約日" value={c.contract_date ?? "—"} />
                     <Row
-                      label="請負金額"
-                      value={c.contract_amount ? formatCurrency(c.contract_amount) : "—"}
+                      label="請負金額（税抜）"
+                      value={c.contract_amount ? formatCurrency(Math.round(c.contract_amount / 1.1)) : "—"}
                     />
                   </Section>
                   <Section title="施工情報">

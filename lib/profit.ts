@@ -1,15 +1,15 @@
 import type { ConstructionDetails, ProfitSummary } from "@/types";
 
 export function calcProfit(d: ConstructionDetails): ProfitSummary {
-  const contractAmount = d.contract_amount ?? 0;
+  const contractAmount = Math.round((d.contract_amount ?? 0) / 1.1); // 税込→税抜
   const subcontractor = d.subcontractor_cost ?? 0;
   const material = d.material_cost ?? 0;
   const other = d.other_cost ?? 0;
 
   const totalCost = subcontractor + material + other;
   const profit = contractAmount - totalCost;
-  // 原価ベース利益率: (請負金額 - 原価) ÷ 原価 × 100
-  const profitRate = totalCost > 0 ? (profit / totalCost) * 100 : 0;
+  // 売上ベース利益率: (税抜売上 - 原価) ÷ 税抜売上 × 100
+  const profitRate = contractAmount > 0 ? (profit / contractAmount) * 100 : 0;
 
   return {
     contract_amount: contractAmount,
