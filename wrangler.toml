@@ -13,7 +13,7 @@ pages_build_output_dir = ".vercel/output/static"
 #      Variable name: DB  /  D1 database: pino-db  を追加
 [[d1_databases]]
 binding = "DB"
-database_name = "pino-db"
+database_name = "pino"
 database_id = "f8f1b272-da7a-40c5-9e99-7c199ecb1294"
 
 # ── R2 バケット（写真保存・任意）────────────────────────────
