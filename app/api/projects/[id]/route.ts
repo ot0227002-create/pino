@@ -1,7 +1,7 @@
 export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
-import { dbServer, hasSupabaseServer } from "@/lib/db-server";
+import { getDB } from "@/lib/db-server";
 import type { ConstructionDetails } from "@/types";
 
 function calcProfit(c: Partial<ConstructionDetails>) {
@@ -16,168 +16,112 @@ function calcProfit(c: Partial<ConstructionDetails>) {
   return { contract_amount, total_cost, profit, profit_rate };
 }
 
-// GET /api/projects/[id] — 1件取得
+// GET /api/projects/[id]
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!hasSupabaseServer) {
-    return NextResponse.json(
-      { error: "Supabase is not configured" },
-      { status: 503 }
-    );
-  }
+  const db = getDB();
+  if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 503 });
 
   const { id } = await params;
+  const project = await db.prepare("SELECT * FROM projects WHERE id = ?").bind(id).first();
+  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const { data: project, error } = await dbServer
-    .from("projects")
-    .select("*")
-    .eq("id", id)
-    .single();
-
-  if (error || !project) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const [{ data: construction }, { data: images }, { data: workItems }] = await Promise.all([
-    dbServer
-      .from("construction_details")
-      .select("*")
-      .eq("project_id", id)
-      .maybeSingle(),
-    dbServer
-      .from("project_images")
-      .select("*")
-      .eq("project_id", id)
-      .order("created_at", { ascending: false }),
-    dbServer
-      .from("work_items")
-      .select("*")
-      .eq("project_id", id)
-      .order("sort_order"),
+  const [construction, images, workItems] = await Promise.all([
+    db.prepare("SELECT * FROM construction_details WHERE project_id = ?").bind(id).first(),
+    db.prepare("SELECT * FROM project_images WHERE project_id = ? ORDER BY created_at DESC").bind(id).all(),
+    db.prepare("SELECT * FROM work_items WHERE project_id = ? ORDER BY sort_order").bind(id).all(),
   ]);
 
-  const profit = construction ? calcProfit(construction) : undefined;
-
+  const profit = construction ? calcProfit(construction as Partial<ConstructionDetails>) : undefined;
   return NextResponse.json({
     ...project,
-    construction: construction
-      ? { ...construction, work_items: workItems ?? [] }
-      : null,
-    images: images ?? [],
+    construction: construction ? { ...construction, work_items: workItems.results } : null,
+    images: images.results,
     profit,
   });
 }
 
-// PATCH /api/projects/[id] — 案件・工事情報を更新
-// Body: { project?: {...}, construction?: {...} }
+// PATCH /api/projects/[id]
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!hasSupabaseServer) {
-    return NextResponse.json(
-      { error: "Supabase is not configured" },
-      { status: 503 }
-    );
-  }
+  const db = getDB();
+  if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 503 });
 
   const { id } = await params;
   const body = await req.json();
   const now = new Date().toISOString();
 
-  // 案件フィールドの更新
   if (body.project) {
-    const { error } = await dbServer
-      .from("projects")
-      .update({ ...body.project, updated_at: now })
-      .eq("id", id);
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    const p = body.project;
+    const fields = Object.keys(p).map(k => `${k} = ?`).join(", ");
+    await db.prepare(`UPDATE projects SET ${fields}, updated_at = ? WHERE id = ?`)
+      .bind(...Object.values(p), now, id).run();
   }
 
-  // 工事情報のUpsert
   if (body.construction) {
-    const { data: existing } = await dbServer
-      .from("construction_details")
-      .select("id")
-      .eq("project_id", id)
-      .maybeSingle();
+    const existing = await db.prepare(
+      "SELECT id FROM construction_details WHERE project_id = ?"
+    ).bind(id).first();
 
+    const c = body.construction;
     if (existing) {
-      const { error } = await dbServer
-        .from("construction_details")
-        .update({ ...body.construction, updated_at: now })
-        .eq("project_id", id);
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
+      const fields = Object.keys(c).map(k => `${k} = ?`).join(", ");
+      await db.prepare(`UPDATE construction_details SET ${fields}, updated_at = ? WHERE project_id = ?`)
+        .bind(...Object.values(c), now, id).run();
     } else {
-      const { error } = await dbServer
-        .from("construction_details")
-        .insert({
-          ...body.construction,
-          project_id: id,
-          created_at: now,
-          updated_at: now,
-        });
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
+      const cId = crypto.randomUUID();
+      const keys = ["id", "project_id", ...Object.keys(c), "created_at", "updated_at"];
+      const vals = [cId, id, ...Object.values(c), now, now];
+      const ph = vals.map(() => "?").join(", ");
+      await db.prepare(`INSERT INTO construction_details (${keys.join(", ")}) VALUES (${ph})`)
+        .bind(...vals).run();
     }
   }
 
-  // 工事項目を全置き換え（送られてきた場合）
   if (body.work_items !== undefined) {
-    // 既存を全削除
-    await dbServer.from("work_items").delete().eq("project_id", id);
-    // 新しい項目を挿入
+    await db.prepare("DELETE FROM work_items WHERE project_id = ?").bind(id).run();
     const items = body.work_items as Array<{
       category: string; name: string; detail: string; sort_order?: number;
     }>;
     if (items.length > 0) {
-      const { error: wiErr } = await dbServer.from("work_items").insert(
-        items.map((item, index) => ({
-          project_id: id,
-          category: item.category,
-          name: item.name,
-          detail: item.detail ?? "",
-          sort_order: item.sort_order ?? index,
-        }))
-      );
-      if (wiErr) {
-        return NextResponse.json({ error: wiErr.message }, { status: 500 });
-      }
+      await Promise.all(items.map((item, index) =>
+        db.prepare(
+          "INSERT INTO work_items (id, project_id, category, name, detail, sort_order) VALUES (?, ?, ?, ?, ?, ?)"
+        ).bind(crypto.randomUUID(), id, item.category, item.name, item.detail ?? "", item.sort_order ?? index).run()
+      ));
     }
+  }
+
+  // 画像レコード追加（URLのみ）
+  if (body.image) {
+    const { image_url, r2_key, category } = body.image;
+    await db.prepare(
+      "INSERT INTO project_images (id, project_id, image_url, r2_key, category) VALUES (?, ?, ?, ?, ?)"
+    ).bind(crypto.randomUUID(), id, image_url, r2_key ?? null, category ?? "other").run();
+  }
+
+  // 画像レコード削除
+  if (body.delete_image_id) {
+    await db.prepare("DELETE FROM project_images WHERE id = ? AND project_id = ?")
+      .bind(body.delete_image_id, id).run();
   }
 
   return NextResponse.json({ success: true });
 }
 
-// DELETE /api/projects/[id] — 案件を削除（関連データも連動削除）
+// DELETE /api/projects/[id]
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!hasSupabaseServer) {
-    return NextResponse.json(
-      { error: "Supabase is not configured" },
-      { status: 503 }
-    );
-  }
+  const db = getDB();
+  if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 503 });
 
   const { id } = await params;
-
-  // 関連データを先に削除（Supabase RLSがCASCADEをブロックする場合の保険）
-  await dbServer.from("project_images").delete().eq("project_id", id);
-  await dbServer.from("construction_details").delete().eq("project_id", id);
-
-  const { error } = await dbServer.from("projects").delete().eq("id", id);
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
+  await db.prepare("DELETE FROM projects WHERE id = ?").bind(id).run();
   return NextResponse.json({ success: true });
 }

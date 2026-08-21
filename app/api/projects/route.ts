@@ -1,7 +1,7 @@
 export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
-import { dbServer, hasSupabaseServer } from "@/lib/db-server";
+import { getDB } from "@/lib/db-server";
 import type { ConstructionDetails } from "@/types";
 
 function calcProfit(c: Partial<ConstructionDetails>) {
@@ -16,48 +16,36 @@ function calcProfit(c: Partial<ConstructionDetails>) {
   return { contract_amount, total_cost, profit, profit_rate };
 }
 
-// GET /api/projects — 全案件一覧（工事詳細・写真・利益付き）
+// GET /api/projects
 export async function GET() {
-  if (!hasSupabaseServer) {
-    return NextResponse.json(
-      { error: "Supabase is not configured" },
-      { status: 503 }
-    );
-  }
+  const db = getDB();
+  if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 503 });
 
-  const { data: projects, error } = await dbServer
-    .from("projects")
-    .select("*")
-    .order("updated_at", { ascending: false });
+  const projects = await db.prepare(
+    "SELECT * FROM projects ORDER BY updated_at DESC"
+  ).all();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  const ids = projects.results.map((p: Record<string, unknown>) => p.id as string);
+  if (ids.length === 0) return NextResponse.json([]);
 
-  const ids = (projects ?? []).map((p: { id: string }) => p.id);
-  const [{ data: constructions }, { data: images }, { data: workItems }] = await Promise.all([
-    ids.length
-      ? dbServer.from("construction_details").select("*").in("project_id", ids)
-      : Promise.resolve({ data: [] }),
-    ids.length
-      ? dbServer.from("project_images").select("*").in("project_id", ids)
-      : Promise.resolve({ data: [] }),
-    ids.length
-      ? dbServer.from("work_items").select("*").in("project_id", ids).order("sort_order")
-      : Promise.resolve({ data: [] }),
+  const placeholders = ids.map(() => "?").join(",");
+  const [constructions, images, workItems] = await Promise.all([
+    db.prepare(`SELECT * FROM construction_details WHERE project_id IN (${placeholders})`).bind(...ids).all(),
+    db.prepare(`SELECT * FROM project_images WHERE project_id IN (${placeholders}) ORDER BY created_at DESC`).bind(...ids).all(),
+    db.prepare(`SELECT * FROM work_items WHERE project_id IN (${placeholders}) ORDER BY sort_order`).bind(...ids).all(),
   ]);
 
-  const result = (projects ?? []).map((p: { id: string }) => {
-    const construction = (constructions ?? []).find(
-      (c: { project_id: string }) => c.project_id === p.id
+  const result = projects.results.map((p: Record<string, unknown>) => {
+    const construction = constructions.results.find(
+      (c: Record<string, unknown>) => c.project_id === p.id
     );
-    const projectImages = (images ?? []).filter(
-      (i: { project_id: string }) => i.project_id === p.id
+    const projectImages = images.results.filter(
+      (i: Record<string, unknown>) => i.project_id === p.id
     );
-    const projectWorkItems = (workItems ?? []).filter(
-      (w: { project_id: string }) => w.project_id === p.id
+    const projectWorkItems = workItems.results.filter(
+      (w: Record<string, unknown>) => w.project_id === p.id
     );
-    const profit = construction ? calcProfit(construction) : undefined;
+    const profit = construction ? calcProfit(construction as Partial<ConstructionDetails>) : undefined;
     return {
       ...p,
       construction: construction ? { ...construction, work_items: projectWorkItems } : null,
@@ -69,40 +57,32 @@ export async function GET() {
   return NextResponse.json(result);
 }
 
-// POST /api/projects — 新規案件作成
+// POST /api/projects
 export async function POST(req: NextRequest) {
-  if (!hasSupabaseServer) {
-    return NextResponse.json(
-      { error: "Supabase is not configured" },
-      { status: 503 }
-    );
-  }
+  const db = getDB();
+  if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 503 });
 
   const body = await req.json();
+  const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  const { data, error } = await dbServer
-    .from("projects")
-    .insert({
-      customer_name: body.customer_name,
-      phone: body.phone ?? "",
-      address: body.address ?? "",
-      work_type: body.work_type ?? "reform",
-      status: body.status ?? "new_inquiry",
-      target_month: body.target_month ?? null,
-      next_action_date: body.next_action_date ?? null,
-      memo: body.memo ?? null,
-      last_contact_date: null,
-      drawing_url: null,
-      created_at: now,
-      updated_at: now,
-    })
-    .select()
-    .single();
+  await db.prepare(
+    `INSERT INTO projects (id, customer_name, phone, address, work_type, status, target_month, next_action_date, memo, last_contact_date, drawing_url, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)`
+  ).bind(
+    id,
+    body.customer_name,
+    body.phone ?? "",
+    body.address ?? "",
+    body.work_type ?? "reform",
+    body.status ?? "new_inquiry",
+    body.target_month ?? null,
+    body.next_action_date ?? null,
+    body.memo ?? null,
+    now,
+    now,
+  ).run();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json(data, { status: 201 });
+  const project = await db.prepare("SELECT * FROM projects WHERE id = ?").bind(id).first();
+  return NextResponse.json(project, { status: 201 });
 }

@@ -1,19 +1,33 @@
 # こばかいアプリ — Cloudflare Pages 設定
-# GitHub 連携デプロイ時はこのファイルを自動的に参照します
 name = "pino"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = ".vercel/output/static"
 
-# ────────────────────────────────────────────────────────────
-# 環境変数はここに直書きせず、Cloudflare Pages ダッシュボードの
-# Settings → Environment variables で設定してください。
-# （シークレットは必ず "Encrypt" にチェックを入れる）
-#
-# 必要な変数:
+# ── D1 データベース（案件データ保存）────────────────────────
+# 手順:
+#   1. Cloudflare ダッシュボード → Workers & Pages → D1 → "Create database"
+#      データベース名: pino-db
+#   2. 作成後に表示される "Database ID" を下の database_id に貼り付ける
+#   3. Cloudflare Pages → pino → Settings → Bindings → D1 database bindings
+#      Variable name: DB  /  D1 database: pino-db  を追加
+[[d1_databases]]
+binding = "DB"
+database_name = "pino-db"
+database_id = "YOUR_D1_DATABASE_ID"
+
+# ── R2 バケット（写真保存・任意）────────────────────────────
+# 手順:
+#   1. Cloudflare ダッシュボード → R2 → "Create bucket"
+#      バケット名: pino-images
+#   2. Cloudflare Pages → pino → Settings → Bindings → R2 bucket bindings
+#      Variable name: BUCKET  /  R2 bucket: pino-images  を追加
+# ※ R2 を設定しない場合、写真はデバイスのローカルストレージに保存されます
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "pino-images"
+
+# ── 環境変数はダッシュボードで設定 ──────────────────────────
+# Cloudflare Pages → Settings → Environment variables で追加:
 #   APP_PASSWORD               ← ログインパスワード
 #   APP_SESSION_SECRET         ← セッション署名用ランダム文字列 (Encrypt)
-#   NEXT_PUBLIC_SUPABASE_URL   ← https://xxxxx.supabase.co
-#   NEXT_PUBLIC_SUPABASE_ANON_KEY  ← Supabase anon/public キー
-#   SUPABASE_SERVICE_ROLE_KEY  ← Supabase service_role キー (Encrypt)
-# ────────────────────────────────────────────────────────────

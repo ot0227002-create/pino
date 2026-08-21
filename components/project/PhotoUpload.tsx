@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, FileText, Plus, Trash2, X, ZoomIn } from "lucide-react";
-import { supabase, hasSupabase } from "@/lib/supabase-client";
+import { Camera, FileText, Plus, X, ZoomIn } from "lucide-react";
 import { IMAGE_CATEGORY_LABEL, type ImageCategory, type ProjectImage } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +15,6 @@ interface LocalPhoto {
   createdAt: string;
 }
 
-// ── ヘルパー ──────────────────────────────────────
 const lsKey = (id: string) => `lsphotos_${id}`;
 
 function loadLocal(projectId: string): LocalPhoto[] {
@@ -26,9 +24,7 @@ function loadLocal(projectId: string): LocalPhoto[] {
 
 function saveLocal(projectId: string, photos: LocalPhoto[]) {
   try { localStorage.setItem(lsKey(projectId), JSON.stringify(photos)); }
-  catch {
-    alert("ストレージ容量不足です。不要な写真を削除してください。");
-  }
+  catch { alert("ストレージ容量不足です。不要な写真を削除してください。"); }
 }
 
 async function compressToBase64(file: File): Promise<string> {
@@ -60,7 +56,6 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-// ── Props ─────────────────────────────────────────
 interface Props {
   projectId: string;
   images: ProjectImage[];
@@ -68,13 +63,13 @@ interface Props {
 }
 
 const DISPLAY_CATEGORIES: { cat: ImageCategory; label: string; color: string }[] = [
-  { cat: "before",      label: "ビフォー",   color: "bg-blue-600 text-white" },
-  { cat: "after",       label: "アフター",   color: "bg-emerald-600 text-white" },
-  { cat: "in_progress", label: "施工中",     color: "bg-amber-500 text-white" },
+  { cat: "before",      label: "ビフォー",     color: "bg-blue-600 text-white" },
+  { cat: "after",       label: "アフター",     color: "bg-emerald-600 text-white" },
+  { cat: "in_progress", label: "施工中",       color: "bg-amber-500 text-white" },
   { cat: "other",       label: "図面・その他", color: "bg-gray-600 text-white" },
 ];
 
-export function PhotoUpload({ projectId, images: supabaseImages, onChange }: Props) {
+export function PhotoUpload({ projectId, images: serverImages, onChange }: Props) {
   const [category, setCategory] = useState<ImageCategory>("before");
   const [uploading, setUploading] = useState(false);
   const [localPhotos, setLocalPhotos] = useState<LocalPhoto[]>([]);
@@ -82,51 +77,46 @@ export function PhotoUpload({ projectId, images: supabaseImages, onChange }: Pro
   const imgRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
 
-  // マウント時にlocalStorageから復元
-  useEffect(() => {
-    setLocalPhotos(loadLocal(projectId));
-  }, [projectId]);
+  useEffect(() => { setLocalPhotos(loadLocal(projectId)); }, [projectId]);
 
-  function persist(photos: LocalPhoto[]) {
+  function persistLocal(photos: LocalPhoto[]) {
     setLocalPhotos(photos);
     saveLocal(projectId, photos);
-    // 親に通知（Supabase画像 + ローカル画像）
     const converted: ProjectImage[] = photos.map(p => ({
-      id: p.id,
-      project_id: projectId,
-      image_url: p.dataUrl,
-      category: p.category,
-      created_at: p.createdAt,
+      id: p.id, project_id: projectId, image_url: p.dataUrl,
+      category: p.category, created_at: p.createdAt,
     }));
-    onChange([...supabaseImages, ...converted]);
+    onChange([...serverImages, ...converted]);
   }
 
   async function handleImageFile(file: File) {
     setUploading(true);
     try {
-      if (hasSupabase) {
-        // Supabase アップロード
-        const ext = file.name.split(".").pop() ?? "jpg";
-        const path = `${projectId}/${Date.now()}.${ext}`;
-        const { error } = await supabase.storage.from("project-images").upload(path, file, { upsert: true });
-        if (error) throw error;
-        const { data: { publicUrl } } = supabase.storage.from("project-images").getPublicUrl(path);
-        const { data, error: dbErr } = await supabase
-          .from("project_images").insert({ project_id: projectId, image_url: publicUrl, category }).select().single();
-        if (dbErr) throw dbErr;
-        onChange([data, ...supabaseImages]);
-      } else {
-        // LocalStorage Base64
-        const dataUrl = await compressToBase64(file);
-        const photo: LocalPhoto = {
-          id: `img_${Date.now()}`,
-          dataUrl,
-          category,
-          isPdf: false,
-          fileName: file.name,
-          createdAt: new Date().toISOString(),
+      // R2 アップロードを試みる
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/images/upload", { method: "POST", body: form });
+
+      if (res.ok) {
+        // R2 成功 → D1 に画像レコード保存
+        const { key, url } = await res.json() as { key: string; url: string };
+        await fetch(`/api/projects/${projectId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: { image_url: url, r2_key: key, category } }),
+        });
+        const newImage: ProjectImage = {
+          id: crypto.randomUUID(), project_id: projectId,
+          image_url: url, category, created_at: new Date().toISOString(),
         };
-        persist([photo, ...localPhotos]);
+        onChange([newImage, ...serverImages]);
+      } else {
+        // R2 未設定 → localStorage Base64 フォールバック
+        const dataUrl = await compressToBase64(file);
+        persistLocal([{
+          id: `img_${Date.now()}`, dataUrl, category,
+          isPdf: false, fileName: file.name, createdAt: new Date().toISOString(),
+        }, ...localPhotos]);
       }
     } catch (e) {
       console.error(e);
@@ -141,15 +131,10 @@ export function PhotoUpload({ projectId, images: supabaseImages, onChange }: Pro
     setUploading(true);
     try {
       const dataUrl = await fileToDataUrl(file);
-      const photo: LocalPhoto = {
-        id: `pdf_${Date.now()}`,
-        dataUrl,
-        category: "other",
-        isPdf: true,
-        fileName: file.name,
-        createdAt: new Date().toISOString(),
-      };
-      persist([photo, ...localPhotos]);
+      persistLocal([{
+        id: `pdf_${Date.now()}`, dataUrl, category: "other",
+        isPdf: true, fileName: file.name, createdAt: new Date().toISOString(),
+      }, ...localPhotos]);
     } catch (e) {
       console.error(e);
       alert("PDFの保存に失敗しました");
@@ -159,27 +144,31 @@ export function PhotoUpload({ projectId, images: supabaseImages, onChange }: Pro
     }
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string, r2_key?: string) {
     if (!confirm("この写真・ファイルを削除しますか？")) return;
-    if (hasSupabase && !id.startsWith("img_") && !id.startsWith("pdf_")) {
-      supabase.from("project_images").delete().eq("id", id).then(() => {});
-      onChange(supabaseImages.filter(i => i.id !== id));
+
+    if (id.startsWith("img_") || id.startsWith("pdf_")) {
+      // localStorage 画像
+      persistLocal(localPhotos.filter(p => p.id !== id));
     } else {
-      persist(localPhotos.filter(p => p.id !== id));
+      // D1 + R2 画像
+      if (r2_key) {
+        await fetch(`/api/images/${encodeURIComponent(r2_key)}`, { method: "DELETE" });
+      }
+      await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delete_image_id: id }),
+      });
+      onChange(serverImages.filter(i => i.id !== id));
     }
   }
 
-  // 全写真（Supabaseローカルフォトをマージ）
-  const allPhotos: (ProjectImage & { isPdf?: boolean; fileName?: string })[] = [
-    ...supabaseImages,
+  const allPhotos: (ProjectImage & { isPdf?: boolean; fileName?: string; r2_key?: string })[] = [
+    ...serverImages,
     ...localPhotos.map(p => ({
-      id: p.id,
-      project_id: projectId,
-      image_url: p.dataUrl,
-      category: p.category,
-      created_at: p.createdAt,
-      isPdf: p.isPdf,
-      fileName: p.fileName,
+      id: p.id, project_id: projectId, image_url: p.dataUrl,
+      category: p.category, created_at: p.createdAt, isPdf: p.isPdf, fileName: p.fileName,
     })),
   ];
 
@@ -198,7 +187,7 @@ export function PhotoUpload({ projectId, images: supabaseImages, onChange }: Pro
         ))}
       </div>
 
-      {/* アップロードボタン群 */}
+      {/* アップロードボタン */}
       <div className="grid grid-cols-2 gap-2">
         <input ref={imgRef} type="file" accept="image/*" capture="environment" className="hidden"
           onChange={e => e.target.files?.[0] && handleImageFile(e.target.files[0])} />
@@ -207,10 +196,11 @@ export function PhotoUpload({ projectId, images: supabaseImages, onChange }: Pro
           <Camera className="h-5 w-5" />
           {uploading ? "保存中..." : `${IMAGE_CATEGORY_LABEL[category]}を追加`}
         </button>
-
         <input ref={pdfRef} type="file" accept="application/pdf,image/*" className="hidden"
           onChange={e => e.target.files?.[0] && (
-            e.target.files[0].type === "application/pdf" ? handlePdfFile(e.target.files[0]) : handleImageFile(e.target.files[0])
+            e.target.files[0].type === "application/pdf"
+              ? handlePdfFile(e.target.files[0])
+              : handleImageFile(e.target.files[0])
           )} />
         <button type="button" onClick={() => pdfRef.current?.click()} disabled={uploading}
           className="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 py-4 text-sm font-medium text-gray-600 active:bg-gray-100 disabled:opacity-50">
@@ -240,20 +230,20 @@ export function PhotoUpload({ projectId, images: supabaseImages, onChange }: Pro
                       onClick={e => e.stopPropagation()}>
                       <FileText className="h-8 w-8 text-gray-400" />
                       <span className="text-[9px] text-gray-400 px-1 truncate w-full text-center">
-                        {(photo as { fileName?: string }).fileName ?? "PDF"}
+                        {photo.fileName ?? "PDF"}
                       </span>
                     </a>
                   ) : (
                     <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={photo.image_url} alt={label}
-                        className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 group-active:bg-black/20 transition-colors flex items-center justify-center">
+                      <img src={photo.image_url} alt={label} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
                         <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 drop-shadow transition-opacity" />
                       </div>
                     </>
                   )}
-                  <button type="button" onClick={e => { e.stopPropagation(); handleDelete(photo.id); }}
+                  <button type="button"
+                    onClick={e => { e.stopPropagation(); handleDelete(photo.id, photo.r2_key); }}
                     className="absolute top-1 right-1 h-6 w-6 flex items-center justify-center rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 active:opacity-100 transition-opacity">
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -271,11 +261,10 @@ export function PhotoUpload({ projectId, images: supabaseImages, onChange }: Pro
         </div>
       )}
 
-      {/* ライトボックス */}
       {lightbox && (
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4"
           onClick={() => setLightbox(null)}>
-          <button className="absolute top-4 right-4 text-white p-2 rounded-full bg-white/20 active:bg-white/30">
+          <button className="absolute top-4 right-4 text-white p-2 rounded-full bg-white/20">
             <X className="h-6 w-6" />
           </button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
