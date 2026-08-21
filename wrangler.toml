@@ -23,9 +23,9 @@ database_id = "f8f1b272-da7a-40c5-9e99-7c199ecb1294"
 #   2. Cloudflare Pages → pino → Settings → Bindings → R2 bucket bindings
 #      Variable name: BUCKET  /  R2 bucket: pino-images  を追加
 # ※ R2 を設定しない場合、写真はデバイスのローカルストレージに保存されます
-[[r2_buckets]]
-binding = "BUCKET"
-bucket_name = "pino-images"
+# [[r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "pino-images"
 
 # ── 環境変数はダッシュボードで設定 ──────────────────────────
 # Cloudflare Pages → Settings → Environment variables で追加:
